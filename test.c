@@ -1,5 +1,6 @@
 #if 1
 #include <stdio.h>
+#include <sys/time.h>
 #include <opencv2/imgproc/imgproc_c.h>
 #include "capture.h"
 
@@ -32,14 +33,18 @@ static void calc_avgimg(IplImage *img)
     cvAdd(t1, t2, final, NULL);
 }
 
+static inline double get_time()
+{
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    return t.tv_sec + t.tv_usec * 1e-6;
+}
+
 int main(int argc, char **argv)
 {
     int i = 0;
     capture_t ctx = {0};
     start_capture(&ctx);
-    cvNamedWindow("avg", 1);
-    cvNamedWindow("diff", 1);
-    cvNamedWindow("bkg", 1);
     cvNamedWindow("final", 1);
     // capture background
     for (i = 0; i < 10; i++) {
@@ -48,20 +53,18 @@ int main(int argc, char **argv)
         calc_avgimg(img);
     }
     cvConvert(avg, bkg);
+    double ms = 0; int nbf = 0;
     while(1) {
         IplImage *img = capture_frame(&ctx);
         if (!img) goto realerr;
+        double time = get_time();
         calc_avgimg(img);
-        cvShowImage("avg", avg);
-        cvShowImage("diff", diff);
-        cvShowImage("bkg", bkg);
+        ms += (get_time() - time);
         cvShowImage("final", final);
         release_frame(&ctx);
+        nbf++;
         if ((cvWaitKey(1)&255)==27)break; // esc
     }
-    cvDestroyWindow("diff");
-    cvDestroyWindow("avg");
-    cvDestroyWindow("bkg");
     cvDestroyWindow("final");
     stop_capture(&ctx);
     cvReleaseImage(&avg);
@@ -71,6 +74,7 @@ int main(int argc, char **argv)
     cvReleaseImage(&final);
     cvReleaseImage(&t1);
     cvReleaseImage(&t2);
+    printf("avgtime : %f ms\n", (ms/nbf)*1000);
     return 0;
 
  realerr:
