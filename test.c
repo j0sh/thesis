@@ -3,34 +3,30 @@
 #include <opencv2/imgproc/imgproc_c.h>
 #include "capture.h"
 
-IplImage *avg, *diff, *i32, *bkg, *gray, *final;
+IplImage *avg, *diff, *i32, *bkg, *final;
 
 static void calc_avgimg(IplImage *img)
 {
     if (!avg) {
         CvSize size = { .width = img->width, .height = img->height };
-        avg = cvCreateImage(size, IPL_DEPTH_32F, 1);
-        gray = cvCreateImage(size, IPL_DEPTH_32F, 1);
+        avg = cvCreateImage(size, IPL_DEPTH_32F, 3);
         i32 = cvCreateImage(size, IPL_DEPTH_32F, 3);
-        diff = cvCreateImage(size, IPL_DEPTH_32F, 1);
-        bkg = cvCreateImage(size, IPL_DEPTH_32F, 1);
-        final = cvCreateImage(size, IPL_DEPTH_32F, 1);
+        diff = cvCreateImage(size, IPL_DEPTH_32F, 3);
+        bkg = cvCreateImage(size, IPL_DEPTH_32F, 3);
+        final = cvCreateImage(size, IPL_DEPTH_32F, 3);
         cvConvertScale(img, i32, 1/255.0, 0);
-        cvCvtColor(i32, gray, CV_RGB2GRAY);
-        cvConvert(gray, avg);
         return;
     }
     cvConvertScale(img, i32, 1/255.0, 0);
-    cvCvtColor(i32, gray, CV_RGB2GRAY);
 
-    cvAbsDiff(gray, avg, diff);
-    cvRunningAvg(gray, avg, 0.10, NULL);
+    cvAbsDiff(i32, avg, diff);
+    cvRunningAvg(i32, avg, 0.2, NULL);
 
 
     int i, j, k = 0;
     char *data = final->imageData;
     char *diffdata = diff->imageData;
-    char *imgdata = gray->imageData;
+    char *imgdata = i32->imageData;
     char *bkgdata = bkg->imageData;
     for (i = 0; i < img->width; i++) {
         float *final_p = (float*)(data + k);
@@ -38,16 +34,15 @@ static void calc_avgimg(IplImage *img)
         float *img_p = (float*)(imgdata + k);
         float *bkg_p = (float*)(bkgdata + k);
         for (j = 0; j < img->height; j++) {
-            float p = *thresh_p * 1.2;
-            p = p >= 1.0 ? 1.0 : p;
-            p = p <= 0.0 ? 0.0 : p;
-            *final_p = (p * *img_p) + ((1.0 - p) * *bkg_p);
-            final_p++;
-            thresh_p++;
-            img_p++;
-            bkg_p++;
+            float p = *thresh_p++;
+            *final_p++ = (p * *img_p++) + ((1.0 - p) * *bkg_p++);
+            p = *thresh_p++;
+            *final_p++ = (p * *img_p++) + ((1.0 - p) * *bkg_p++);
+            p = *thresh_p++;
+            *final_p++ = (p * *img_p++) + ((1.0 - p) * *bkg_p++);
+
         }
-        k += img->widthStep;
+        k += img->widthStep*img->nChannels;
     }
 }
 
