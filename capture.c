@@ -7,8 +7,8 @@ int start_capture(capture_t *ctx)
     AVStream *st;
     struct SwsContext *sws;
     IplImage *img;
-    CvSize size;
     int ret;
+    CvSize size;
     av_register_all();
     avdevice_register_all();
     fmt = av_find_input_format("v4l2");
@@ -18,8 +18,7 @@ int start_capture(capture_t *ctx)
     ret = avformat_open_input(&ic, "/dev/video0", fmt, NULL);
     if (ret < 0) { av_freep(&ic); goto main_error; }
     avformat_find_stream_info(ic, NULL);
-    if (ic->nb_streams <= 0) goto main_error;
-    st = ic->streams[0];
+    if (ic->nb_streams <= 0) goto main_error; st = ic->streams[0];
     if (st->codec->codec_type != AVMEDIA_TYPE_VIDEO) goto main_error;
     sws = sws_getContext(st->codec->width, st->codec->height,
         st->codec->pix_fmt, st->codec->width, st->codec->height,
@@ -30,7 +29,7 @@ int start_capture(capture_t *ctx)
     if (ret < 0) goto main_error;
     ret = av_image_fill_linesizes(ctx->d_stride, PIX_FMT_RGB24, st->codec->width);
     if (ret < 0) goto main_error;
-    img = cvCreateImage(size, 8, 3);
+    img = cvCreateImage(size, IPL_DEPTH_8U, 3);
     if (!img) goto main_error;
     av_image_fill_pointers(ctx->img_data, PIX_FMT_RGB24, st->codec->height, (uint8_t*)img->imageData, ctx->d_stride);
 
