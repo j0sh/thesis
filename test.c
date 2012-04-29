@@ -38,16 +38,10 @@ static void calc_avgimg(IplImage *img)
         float *img_p = (float*)(imgdata + k);
         float *bkg_p = (float*)(bkgdata + k);
         for (j = 0; j < img->height; j++) {
-            float x = *thresh_p;
-            float mu = 5.5, sigma = sqrt(0.50);
-            float a = 1/(sigma * 2.5066); // 2.5066 == sqrt(2*pi)
-            float b = (x - mu)/sigma;
-            float c = -0.5*b*b;
-            float scaled_p = a*exp(c);
-            scaled_p = *thresh_p * 1.2;
-            scaled_p = scaled_p >= 1.0 ? 1.0 : scaled_p;
-            scaled_p = scaled_p <= 0.0 ? 0.0 : scaled_p;
-            *final_p = (scaled_p * *img_p) + ((1.0 - scaled_p) * *bkg_p);
+            float p = *thresh_p * 1.2;
+            p = p >= 1.0 ? 1.0 : p;
+            p = p <= 0.0 ? 0.0 : p;
+            *final_p = (p * *img_p) + ((1.0 - p) * *bkg_p);
             final_p++;
             thresh_p++;
             img_p++;
