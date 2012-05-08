@@ -1,0 +1,8 @@
+To build on Linux:
+
+Requires OpenCV and FFmpeg/libav in the pkg-config search path.
+
+OpenCV should be compiled with FFmpeg disabled (-DWITH_FFMPEG=0).
+
+FFmpeg/libav should be current as of git-0110041 or thereabouts,
+with x264 and V4L2 linked.
