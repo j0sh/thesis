@@ -1,0 +1,16 @@
+clear;
+close all;
+%im = imread('Port_big.png');
+%im = imread('jpgimg.jpg');
+%im = imread('lena.tif');
+%im = imnoise(im, 'poisson');
+%im = imnoise(im, 'gaussian', -0.5, 0.02);
+imr = im2double(im(:, :, 1));
+img = im2double(im(:, :, 2));
+imb = im2double(im(:, :, 3));
+figure, imshow(im), title('Original');
+dr = denoise(imr);
+dg = denoise(img);
+db = denoise(imb);
+newimg = cat(3, dr, dg, db);
+figure, imshow(newimg), title('Processed');
