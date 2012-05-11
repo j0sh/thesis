@@ -1,0 +1,30 @@
+<!DOCTYPE html5>
+<html>
+<head>
+</head>
+
+<body>
+    <h1>An interesting way of detecting edges, particularly in noisy images.</h1>
+        Method:
+        <ol><li>Take the 2-D DCT of each 8x8 block in the image.</li>
+            <li>For each block, select the largest AC value and store in a matrix <code>mat</code>.</li>
+            <li>Run a morphological dilation (with a disk of radius 2) over <code>mat</code>.</li>
+            <li>Find a threshold for <code>mat</code>, apply threshold to <code>mat</code>.
+            <li>Use thresholded image to mask the 8x8 blocks in the original image.</li>
+            <li>Run inverse DCT over masked blocks.</li>
+        </ol>
+        <p>This works because although noise creates a lot of high-frequency components, it is not very intense compared to important parts of the image (impulse noise excepted). Therefore, using the largest AC value as a heuristic to filter high-frequency noise works well. Limited testing shows promising results with Poission and additive Gaussian noise. Unsuprisingly, efficacy is reduced as the Gaussian variance increases (although it is mostly unaffected by the additive mean). Impulse noise is also manageable given a density around 5% or lower. Images with a cluttered background do not work well.</p>
+    <table>
+        <tr><td><img src="port-orig.png" /></td><td><img src="port-noisy.png" /></td></tr>
+        <tr><td><img src="port-orig-proc.png" /></td><td><img src="port-noisy-proc.png" /></td></tr>
+        <tr><td><img src="lena-orig.png" /></td><td><img src="lena-noisy.png" /></td></tr>
+        <tr><td><img src="lena-orig-proc.png" /></td><td><img src="lena-noisy-proc.png" /></td></tr>
+    </table>
+    <table>
+        <p>Results are favorable against Sobel and Difference-of-Gaussian edge detection. While Sobel and DoG give accurate contours with clean images, they do not give blobs. (Blob sizes can be adjusted via the structuring element, or the DCT.) With noise, both Sobel and DoG exhibit poor performance.</p>
+        <tr><td><img src="sobel.png" /></td><td><img src="sobel-noisy.png" /></td></tr>
+        <tr><td><img src="dog.png" /></td><td><img src="dog-noisy.png" /></td></tr>
+    </table>
+Josh Allmann 10 May 2012
+</body>
+</html>
