@@ -1,4 +1,4 @@
-#ifndef JOSH_CATPURE_H
+#ifndef JOSH_CAPTURE_H
 #define JOSH_CAPTURE_H
 
 #include <opencv2/core/core_c.h>
