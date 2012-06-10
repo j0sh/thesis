@@ -1,4 +1,4 @@
-#if 1
+#if 0
 #include <stdio.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/opt.h>
