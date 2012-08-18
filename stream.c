@@ -21,8 +21,6 @@ static AVFrame *alloc_picture(AVCodecContext *c)
 }
 
 static struct SwsContext *sws = NULL;
-static uint8_t *video_outbuf = NULL;
-static int video_outbuf_size = 0;
 
 static AVStream *add_video_stream(AVFormatContext *fmt, enum CodecID codec_id)
 {
@@ -59,8 +57,6 @@ static AVStream *add_video_stream(AVFormatContext *fmt, enum CodecID codec_id)
     picture = alloc_picture(c);
     if (!picture) return NULL;
 
-    video_outbuf_size = 20000;
-    video_outbuf = av_malloc(video_outbuf_size);
     return st;
 }
 
@@ -91,14 +87,15 @@ write_finished:
     av_free_packet(&pkt);
 }
 
+#define ERR(msg) { fprintf(stderr, "%s\n", msg); goto realerr; }
 int main(int argc, char **argv)
 {
     char *filename = "rtmp://localhost/flvplayback/beakybird";
     // boilerplate
     capture_t ctx = {0};
-    if (start_capture(&ctx) > 0) goto realerr;
+    if (start_capture(&ctx) > 0) ERR("start_capture");
     cvNamedWindow("cap", 1);
-    
+
     #if 1
     AVOutputFormat *of = NULL;
     AVFormatContext *fmt = NULL;
@@ -106,17 +103,14 @@ int main(int argc, char **argv)
     avcodec_register_all();
     avformat_network_init();
     of = av_guess_format("flv", NULL, NULL);
-    if (!of) goto realerr;
+    if (!of) ERR("av_guess_format");
     of->video_codec = CODEC_ID_H264;
     fmt = avformat_alloc_context();
-    if (!fmt) goto realerr;
+    if (!fmt) ERR("avformat_alloc_context");
     fmt->oformat = of;
     st = add_video_stream(fmt, of->video_codec);
-    if (!st) goto realerr;
-    if (avio_open(&fmt->pb, filename, AVIO_FLAG_WRITE) < 0) {
-        fprintf(stderr, "Unable to open %s", filename);
-        goto realerr;
-    }
+    if (!st) ERR("add_video_stream");
+    if (avio_open(&fmt->pb, filename, AVIO_FLAG_WRITE) < 0) ERR("avio_open");
     avformat_write_header(fmt, NULL);
 
     av_dump_format(fmt, 0, filename, 1);
@@ -125,7 +119,7 @@ int main(int argc, char **argv)
 #if 1
     while (1) {
         IplImage *img = capture_frame(&ctx);
-        if (!img) goto realerr;
+        if (!img) ERR("capture_frame");
         write_video_frame(img, &ctx, fmt, st);
         cvShowImage("cap", img);
         release_frame(&ctx);
@@ -133,7 +127,6 @@ int main(int argc, char **argv)
     }
 #endif
     cvDestroyWindow("cap");
-    av_freep(&video_outbuf);
     sws_freeContext(sws);
     stop_capture(&ctx);
     return 0;
