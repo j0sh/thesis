@@ -3,6 +3,48 @@
 #include <x264.h>
 #include "capture.h"
 
+static void free_mbinfo(void *mbinfo)
+{
+    free(mbinfo);
+}
+
+static uint8_t* get_mbinfo(int w, int h)
+{
+    int mb_x = w/16 + 1, mb_y = h/16 + 1;
+    int x, y, k = mb_x, xy;
+    uint8_t* mb_info = malloc(mb_x*mb_y);
+    if (!mb_info) return NULL;
+    for (y = 0; y < mb_y; y++) {
+        for (x = 0; x < mb_x; x++) {
+            xy = y*k + x;
+            //mb_info[xy] = X264_MBINFO_CONSTANT;
+            if (x > mb_x/4 && x < 3*mb_x/4) mb_info[xy] = 0;
+            else mb_info[xy] = X264_MBINFO_CONSTANT;
+        }
+    }
+    return mb_info;
+}
+
+static void print_mbinfo(uint8_t* mbinfo, int w, int h)
+{
+    int mb_x = w/16 + 1, mb_y = h/16 + 1;
+    int x, y, k = mb_x, xy, sxy, m = 0;
+    char *str = malloc(mb_x*mb_y+mb_y+1);
+    for (y = 0; y < mb_y; y++) {
+        for (x = 0; x < mb_x; x++) {
+            xy = y*k + x, sxy = xy + m;
+            if (mbinfo[xy] == X264_MBINFO_CONSTANT) str[sxy] = '1';
+            else str[sxy] = '0';
+        }
+        m += 1;
+        str[sxy+1] = '\n';
+    }
+    str[sxy + 1] = '\0';
+    printf("Constant blocks\n%s\n", str);
+    free(str);
+}
+
+#if 1
 int main(int argc, char **argv)
 {
     capture_t ctx = {0};
@@ -16,7 +58,8 @@ int main(int argc, char **argv)
     CvSize size = {.width = ctx.img->width, .height = ctx.img->height};
 
     uint8_t *pbuf = malloc(avpicture_get_size(PIX_FMT_NV12, size.width, size.height));
-    if (!pbuf) goto fail;
+    uint8_t *mb_info = get_mbinfo(size.width, size.height);
+    if (!pbuf || !mb_info) goto fail;
     AVFrame pic;
     avpicture_fill((AVPicture*)&pic, pbuf, PIX_FMT_NV12, size.width, size.height);
     struct SwsContext *rgb2yuv = sws_getContext(size.width, size.height, PIX_FMT_BGR24, size.width, size.height, PIX_FMT_NV12, SWS_BICUBIC, NULL, NULL, 0);
@@ -32,10 +75,15 @@ int main(int argc, char **argv)
     param.i_csp = X264_CSP_NV12;
     param.i_width = size.width;
     param.i_height = size.height;
-    //param.b_full_recon = 1;
+    param.analyse.b_mb_info = 1;
+    param.rc.i_bitrate = 25;
+    param.rc.i_rc_method = X264_RC_ABR;
+    param.b_full_recon = 1;
     h = x264_encoder_open(&param);
     if (!h) goto fail;
     pic_in.i_pts = 0;
+    pic_in.prop.mb_info = mb_info;
+    print_mbinfo(mb_info, size.width, size.height);
     sws = sws_getContext(size.width, size.height, PIX_FMT_NV12, size.width, size.height, PIX_FMT_BGR24, SWS_BICUBIC, NULL, NULL, 0);
     if (!sws) goto fail;
     IplImage *out = cvCreateImage(size, IPL_DEPTH_8U, 3);
@@ -62,6 +110,7 @@ endloop:
     cvReleaseImage(&out);
     sws_freeContext(sws);
     if (h) x264_encoder_close(h);
+    free(mb_info);
     stop_capture(&ctx);
     return 0;
 fail:
@@ -70,3 +119,4 @@ fail:
     printf("FAIL\n");
     return -1;
 }
+#endif
