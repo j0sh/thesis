@@ -3,6 +3,14 @@
 #include <x264.h>
 #include "capture.h"
 
+#include <sys/time.h>
+static inline double get_time()
+{
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    return t.tv_sec + t.tv_usec * 1e-6;
+}
+
 static void free_mbinfo(void *mbinfo)
 {
     free(mbinfo);
@@ -23,6 +31,16 @@ static uint8_t* get_mbinfo(int w, int h)
         }
     }
     return mb_info;
+}
+
+static void reset_encoder(x264_t *h, x264_param_t *p)
+{
+    p->analyse.b_mb_info = 1;
+    p->rc.i_bitrate = 25;
+    p->rc.i_rc_method = X264_RC_ABR;
+    if (x264_encoder_reconfig(h, p)) {
+        fprintf(stderr, "Unable to reset encoder\n");
+    }
 }
 
 static void print_mbinfo(uint8_t* mbinfo, int w, int h)
@@ -75,9 +93,6 @@ int main(int argc, char **argv)
     param.i_csp = X264_CSP_NV12;
     param.i_width = size.width;
     param.i_height = size.height;
-    param.analyse.b_mb_info = 1;
-    param.rc.i_bitrate = 25;
-    param.rc.i_rc_method = X264_RC_ABR;
     param.b_full_recon = 1;
     h = x264_encoder_open(&param);
     if (!h) goto fail;
@@ -91,12 +106,18 @@ int main(int argc, char **argv)
     av_image_fill_pointers(img_data, PIX_FMT_BGR24, size.height, (uint8_t*)out->imageData, ctx.d_stride);
     cvNamedWindow("cap", 1);
 
+    double ms;
+    int nbf = 0;
     while (1) {
         int pi_nal, s;
         IplImage *img = capture_frame(&ctx);
         if (!img) break;
         sws_scale(rgb2yuv, (const uint8_t* const*)ctx.img_data, ctx.d_stride, 0, size.height, yuv_data, pic.linesize);
+        double start = get_time();
         s = x264_encoder_encode(h, &nal, &pi_nal, &pic_in, &pic_out);
+        ms += (get_time() - start);
+        if (!nbf) reset_encoder(h, &param);
+        nbf += 1;
         if (!s) goto endloop;
         if (s < 0) break;
         sws_scale(sws, (const uint8_t* const*)pic_out.img.plane, pic_out.img.i_stride, 0, size.height, img_data, ctx.d_stride);
@@ -112,6 +133,7 @@ endloop:
     if (h) x264_encoder_close(h);
     free(mb_info);
     stop_capture(&ctx);
+    printf("time %f\n", (ms/nbf)*1000);
     return 0;
 fail:
     if (h) x264_encoder_close(h);
