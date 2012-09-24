@@ -16,36 +16,48 @@ static void free_mbinfo(void *mbinfo)
     free(mbinfo);
 }
 
+static int in_circle(int x, int y, int w, int h)
+{
+    // scale; normalize to 0..3, shift to origin by 1.5
+    float fx = 3*x/(float)w - 1.5, fy = 3*y/(float)h - 1.5;
+    return !(fx*fx + fy*fy > 1.0); // circle being approx half
+}
+
 static uint8_t* get_mbinfo(int w, int h)
 {
-    int mb_x = w/16 + 1, mb_y = h/16 + 1;
+    int mb_x = w/16 + (0 != w % 16), mb_y = h/16 + (0 != h % 16);
     int x, y, k = mb_x, xy;
     uint8_t* mb_info = malloc(mb_x*mb_y);
     if (!mb_info) return NULL;
     for (y = 0; y < mb_y; y++) {
         for (x = 0; x < mb_x; x++) {
             xy = y*k + x;
-            //mb_info[xy] = X264_MBINFO_CONSTANT;
-            if (x > mb_x/4 && x < 3*mb_x/4) mb_info[xy] = 0;
-            else mb_info[xy] = X264_MBINFO_CONSTANT;
+            mb_info[xy] = X264_MBINFO_CONSTANT * !in_circle(x, y, mb_x, mb_y);
+            //if (x > mb_x/4 && x < 3*mb_x/4) mb_info[xy] = 0;
+            //else mb_info[xy] = X264_MBINFO_CONSTANT;
         }
     }
     return mb_info;
 }
 
-static void reset_encoder(x264_t *h, x264_param_t *p)
+static float* get_offsets(int w, int h)
 {
-    p->analyse.b_mb_info = 1;
-    p->rc.i_bitrate = 25;
-    p->rc.i_rc_method = X264_RC_ABR;
-    if (x264_encoder_reconfig(h, p)) {
-        fprintf(stderr, "Unable to reset encoder\n");
+    int mb_x = w/16 + (0 != w % 16), mb_y = h/16 + (0 != h % 16);
+    int x, y, k = mb_x, xy;
+    float *offsets = malloc(mb_x*mb_y*sizeof(float));
+    if (!offsets) return NULL;
+    for (y = 0; y < mb_y; y++) {
+        for (x = 0; x < mb_x; x++) {
+            xy = y*k + x;
+            offsets[xy] = 100.0f * !in_circle(x, y, mb_x, mb_y);
+        }
     }
+    return offsets;
 }
 
 static void print_mbinfo(uint8_t* mbinfo, int w, int h)
 {
-    int mb_x = w/16 + 1, mb_y = h/16 + 1;
+    int mb_x = w/16 + (0 != w % 16), mb_y = h/16 + (0 != h % 16);
     int x, y, k = mb_x, xy, sxy, m = 0;
     char *str = malloc(mb_x*mb_y+mb_y+1);
     for (y = 0; y < mb_y; y++) {
@@ -59,6 +71,25 @@ static void print_mbinfo(uint8_t* mbinfo, int w, int h)
     }
     str[sxy + 1] = '\0';
     printf("Constant blocks\n%s\n", str);
+    free(str);
+}
+
+static void print_offsets(float* offsets, int w, int h)
+{
+    int mb_x = w/16 + (0 != w % 16), mb_y = h/16 + (0 != h % 16);
+    int x, y, k = mb_x, xy, sxy, m = 0;
+    char *str = malloc(mb_x*mb_y+mb_y+1);
+    for (y = 0; y < mb_y; y++) {
+        for (x = 0; x < mb_x; x++) {
+            xy = y*k + x, sxy = xy + m;
+            if (in_circle(x, y, mb_x, mb_y)) str[sxy] = '1';
+            else str[sxy] = '0';
+        }
+        m += 1;
+        str[sxy+1] = '\n';
+    }
+    str[sxy + 1] = '\0';
+    printf("Offset Blocks\n%s\n", str);
     free(str);
 }
 
@@ -77,6 +108,7 @@ int main(int argc, char **argv)
 
     uint8_t *pbuf = malloc(avpicture_get_size(PIX_FMT_NV12, size.width, size.height));
     uint8_t *mb_info = get_mbinfo(size.width, size.height);
+    float *quant_offsets = get_offsets(size.width, size.height);
     if (!pbuf || !mb_info) goto fail;
     AVFrame pic;
     avpicture_fill((AVPicture*)&pic, pbuf, PIX_FMT_NV12, size.width, size.height);
@@ -94,11 +126,16 @@ int main(int argc, char **argv)
     param.i_width = size.width;
     param.i_height = size.height;
     param.b_full_recon = 1;
+    param.rc.i_bitrate = 25;
+    param.rc.i_rc_method = X264_RC_ABR;
+    param.analyse.b_mb_info = 1;
     h = x264_encoder_open(&param);
     if (!h) goto fail;
     pic_in.i_pts = 0;
+    pic_in.prop.quant_offsets = quant_offsets;
     pic_in.prop.mb_info = mb_info;
     print_mbinfo(mb_info, size.width, size.height);
+    print_offsets(quant_offsets, size.width, size.height);
     sws = sws_getContext(size.width, size.height, PIX_FMT_NV12, size.width, size.height, PIX_FMT_BGR24, SWS_BICUBIC, NULL, NULL, 0);
     if (!sws) goto fail;
     IplImage *out = cvCreateImage(size, IPL_DEPTH_8U, 3);
@@ -116,7 +153,6 @@ int main(int argc, char **argv)
         double start = get_time();
         s = x264_encoder_encode(h, &nal, &pi_nal, &pic_in, &pic_out);
         ms += (get_time() - start);
-        if (!nbf) reset_encoder(h, &param);
         nbf += 1;
         if (!s) goto endloop;
         if (s < 0) break;
@@ -132,6 +168,7 @@ endloop:
     sws_freeContext(sws);
     if (h) x264_encoder_close(h);
     free(mb_info);
+    free(quant_offsets);
     stop_capture(&ctx);
     printf("time %f\n", (ms/nbf)*1000);
     return 0;
