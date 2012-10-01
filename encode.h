@@ -12,7 +12,7 @@ typedef struct {
     double ms;
 } encode_t;
 
-int start_encode(encode_t*, int w, int h);
+int start_encode(encode_t*, int w, int h, uint8_t *in);
 void stop_encode(encode_t*);
 
 #endif
