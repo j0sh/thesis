@@ -139,7 +139,7 @@ void stop_encode(encode_t *enc)
     if (enc->h) x264_encoder_close(enc->h);
 }
 
-#if 1
+#if 0
 int main(int argc, char **argv)
 {
     encode_t enc = {0};
