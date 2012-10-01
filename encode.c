@@ -202,6 +202,7 @@ endloop:
     free(mb_info);
     free(quant_offsets);
     stop_capture(&ctx);
+    cvDestroyWindow("cap");
     return 0;
 fail:
     stop_encode(&enc);

@@ -13,6 +13,7 @@ typedef struct {
 } encode_t;
 
 int start_encode(encode_t*, int w, int h, uint8_t *in);
+int encode_frame(encode_t*);
 void stop_encode(encode_t*);
 
 #endif
