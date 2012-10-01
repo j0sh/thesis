@@ -1,5 +1,8 @@
 #include "capture.h"
 
+#define W 320
+#define H 240
+
 #define ERR(msg) { fprintf(stderr, "%s\n", msg); goto main_error; }
 int start_capture(capture_t *ctx)
 {
@@ -23,13 +26,13 @@ int start_capture(capture_t *ctx)
     st = ic->streams[0];
     if (st->codec->codec_type != AVMEDIA_TYPE_VIDEO) ERR("codec_type");
     sws = sws_getContext(st->codec->width, st->codec->height,
-        st->codec->pix_fmt, st->codec->width, st->codec->height,
+        st->codec->pix_fmt, W, H,
         PIX_FMT_BGR24, SWS_BICUBIC, NULL, NULL, 0);
     if (!sws) ERR("sws_getContext");
-    size.width = st->codec->width; size.height = st->codec->height;
+    size.width = W; size.height= H;
     ret = av_image_fill_linesizes(ctx->s_stride, st->codec->pix_fmt, st->codec->width);
     if (ret < 0) ERR("av_image_fill_linesizes");
-    ret = av_image_fill_linesizes(ctx->d_stride, PIX_FMT_RGB24, st->codec->width);
+    ret = av_image_fill_linesizes(ctx->d_stride, PIX_FMT_RGB24, W);
     if (ret < 0) ERR("av_image_fill_linesizes 2");
     img = cvCreateImage(size, IPL_DEPTH_8U, 3);
     if (!img) ERR("cvCreateImage");
