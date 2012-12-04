@@ -3,6 +3,30 @@
 <head>
 </head>
 <body>
+<h1>Thesis Progress Log</h1>
+<div>
+<p>Tried out ccv's implementation[1] of the TLD tracker[2]. Performance is disappointing at ~350ms/frame for a 320x240 video. Something must be wrong, here is the oprofile output:</p>
+<code style="background:lightgray;">
+CPU: Intel Sandy Bridge microarchitecture, speed 2.701e+06 MHz (estimated)<br/>
+Counted CPU_CLK_UNHALTED events (Clock cycles when not halted) with a unit mask of 0x00 (No unit mask) count 100000<br/>
+samples  %        image name               symbol name<br/>
+716413   57.1342  a.out                    ccv_ferns_feature<br/>
+284652   22.7011  a.out                    ccv_perspective_transform<br/>
+120659    9.6226  a.out                    ccv_ferns_predict<br/>
+35117     2.8006  a.out                    ccv_blur<br/>
+19713     1.5721  a.out                    _ccv_tld_box_variance<br/>
+19391     1.5464  no-vmlinux               /no-vmlinux<br/>
+7107      0.5668  a.out                    ccv_optical_flow_lucas_kanade<br/>
+5656      0.4511  a.out                    ccv_sat<br/>
+5004      0.3991  a.out                    _ccv_resample_area_8u<br/>
+4267      0.3403  a.out                    ccv_sobel<br/>
+3892      0.3104  a.out                    _ccv_tld_long_term_detect
+</code>
+<p>ccv uses random ferns (semi-naive bayes classifiers) as a detector and updating those is slow, but I haven't yet identified the root of the issue. Filed a <a href="https://github.com/liuliu/ccv/issues/49">bug report</a> anyway. Relevant commit: <a href="https://github.com/j0sh/thesis/commit/afc6e1ad37b34dcea5bf1f22524a2c2097fe1b39">afc6e1a</a>
+</p>
+<p>Josh Allmann 03 December 2012</p>
+</div>
+<hr />
 <div>
 <p>Tested x264's per-macroblock quantization offsets with a circle located at the center of the image. Macroblocks outside the circle have a high offset; macroblocks within the circle do not have any extra offsets.</p>
 <img src="bbb-550.jpg" />
