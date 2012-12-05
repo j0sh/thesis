@@ -1,4 +1,4 @@
-#if 0
+#if 1
 #include <stdio.h>
 #include <sys/time.h>
 #include <opencv2/imgproc/imgproc_c.h>
@@ -81,4 +81,3 @@ int main(int argc, char **argv)
     fprintf(stderr, "error capturing\n");
     return 1;
 }
-#endif

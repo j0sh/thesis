@@ -1,4 +1,3 @@
-#if 0
 #include <stdio.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/opt.h>
@@ -134,4 +133,3 @@ realerr:
     fprintf(stderr, "Error somewhere\n");
     return 70;
 }
-#endif

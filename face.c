@@ -1,4 +1,3 @@
-#if 0
 #include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -85,4 +84,3 @@ int main(int argc, char **argv)
     cvReleaseHaarClassifierCascade(&cascade);
     return 0;
 }
-#endif

@@ -133,7 +133,6 @@ static void calc_avgimg(IplImage *img)
     cvRunningAvg(i32, avg, 1.0f/NBAVG, NULL);
 }
 
-#if 0
 int main(int argc, char **argv)
 {
     capture_t ctx = {0};
@@ -228,4 +227,3 @@ fail:
     printf("FAIL\n");
     return -1;
 }
-#endif

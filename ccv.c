@@ -9,7 +9,6 @@ static inline double get_time()
     return t.tv_sec + t.tv_usec * 1e-6;
 }
 
-#if 1
 int main(int argc, char **argv)
 {
     capture_t ctx = {0};
@@ -59,4 +58,3 @@ int main(int argc, char **argv)
     ccv_disable_cache();
     return 0;
 }
-#endif
