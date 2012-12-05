@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 {
     pthread_t thread = {0};
     capture_t ctx = {0};
-    CvHaarClassifierCascade *cascade = cvLoad("haarfacedata.xml", NULL, NULL, NULL);
+    CvHaarClassifierCascade *cascade = cvLoad("data/haarfacedata.xml", NULL, NULL, NULL);
     start_capture(&ctx);
     pthread_create(&thread, NULL, capture_buffer, &ctx);
     cvNamedWindow("result", 1);
