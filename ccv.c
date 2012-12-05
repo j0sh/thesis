@@ -18,14 +18,16 @@ int main(int argc, char **argv)
     start_capture(&ctx);
     ccv_enable_default_cache();
     ccv_tld_info_t info;
+    ccv_tld_param_t parms = ccv_tld_default_params;
     ccv_dense_matrix_t *x = NULL, *y = NULL;
     ccv_tld_t *tld = NULL;
 
     // prime the tracker
     IplImage *img = capture_frame(&ctx);
     if (!img) return 1;
+    parms.rotation = 10;
     ccv_read(img->imageData, &x, CCV_IO_RGB_RAW | CCV_IO_GRAY, img->height, img->width, ctx.d_stride[0]);
-    tld = ccv_tld_new(x, start_r, ccv_tld_default_params);
+    tld = ccv_tld_new(x, start_r, parms);
     release_frame(&ctx);
 
     int nbf = 0;
