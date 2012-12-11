@@ -17,6 +17,8 @@ typedef struct {
     uint8_t *img_data[4];
     IplImage *img;
     AVPacket pkt;
+    char *filename;
+    AVFrame *picture;
 } capture_t;
 
 int start_capture(capture_t *ctx);
