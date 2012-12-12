@@ -93,6 +93,7 @@ void stop_capture(capture_t *ctx)
     avformat_close_input(&ctx->fmt_ctx);
     av_freep(&ctx->fmt_ctx);
     sws_freeContext(ctx->sws);
+    ctx->sws = NULL;
 }
 
 IplImage* capture_frame(capture_t *ctx)
