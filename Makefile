@@ -5,7 +5,7 @@ DEPS=$(shell pkg-config --cflags --libs opencv libavdevice libswscale)
 OTHER=test stream face histogram
 OBJS=encode.o capture.o
 
-all: histogram
+all: cluster
 
 $(OBJS): %.o : %.h
 	$(ENV) gcc $(CFLAGS) $(DEPS) -c $(OBJS:.o=.c)
@@ -15,6 +15,9 @@ motion: $(OBJS)
 
 ccv: capture.o
 	$(ENV) gcc $(CFLAGS) $^ $@.c $(DEPS) -I/home/josh/ccv/lib -L/home/josh/ccv/lib -lccv
+
+cluster:
+	gcc -g cluster.c -lm
 
 $(OTHER): capture.o
 	$(ENV) gcc $(CFLAGS) $^ $@.c $(DEPS)
