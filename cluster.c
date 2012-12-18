@@ -10,8 +10,6 @@ typedef struct {
     int sqsum;
     int count;
 
-    int min;
-    int max;
     double mean;
     double var;
 } cluster;
@@ -58,8 +56,6 @@ static void add_to_cluster(cluster *c, int s)
     c->sum += s;
     c->count += 1;
     calc_stats(c);
-    if (s > c->max) c->max = s;
-    if (s < c->min) c->min = s;
 }
 
 static void remove_from_cluster(cluster *c, int s)
@@ -78,22 +74,6 @@ static void remove_from_cluster(cluster *c, int s)
     c->sum -= s;
     c->count -= 1;
     calc_stats(c);
-    if (s == c->min) {
-        int m = 0xFFFFFFFF;
-        for (i = 0; i < SZ; i++) {
-            if (-1 == c->members[i]) continue;
-            if (c->members[i] < m) m = c->members[i];
-        }
-        c->min = m;
-    }
-    if (s == c->max) {
-        int m = -1;
-        for (i = 0; i < SZ; i++) {
-            if (-1 == c->members[i]) continue;
-            if (c->members[i] > m) m = c->members[i];
-        }
-        c->max = m;
-    }
 }
 
 static void merge_clusters(cluster *a, cluster *b)
@@ -121,11 +101,7 @@ void do_cluster(int samples[30])
 
     // initialize stuff
     for (i = 0; i < SZ; i++) {
-        for (j = 0; j < SZ; j++) {
-            clusters[i].members[j] = -1;
-            clusters[i].min = 0X7FFFFFFF;
-            clusters[i].max = -1;
-        }
+        for (j = 0; j < SZ; j++) clusters[i].members[j] = -1;
         add_to_cluster(&clusters[i], samples[i]);
     }
 
