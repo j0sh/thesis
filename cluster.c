@@ -23,11 +23,6 @@ static void print_cluster(cluster *c)
     printf("mu %.2f std %.2f\n", c->mean, sqrt(c->var));
 }
 
-static double cdf(int x, double mean, double var)
-{
-    return 0.5*(1 + erf((x - mean)/sqrt(2*var)));
-}
-
 static void calc_stats(cluster *c)
 {
     double d, x, y;
@@ -36,8 +31,6 @@ static void calc_stats(cluster *c)
     x = c->sqsum * d;
     y = c->mean*c->mean;
     c->var = x - y;
-    c->var += !c->var*c->mean/2;    // special case for zero variance
-    c->var += c->var < 1.0;        // special case for 0, 1 variance
 }
 
 static void add_to_cluster(cluster *c, int s)
@@ -87,11 +80,36 @@ static void merge_clusters(cluster *a, cluster *b)
     }
 }
 
-static int within(cluster *a, cluster *b)
+static double max(double x, double y)
+{
+    return x < y ? y : x;
+}
+
+static inline double adj_std(double mean, double var)
+{
+    // return adjusted stddev in case of low variance, big mean
+    double l = ceil(log(mean));
+    double s = sqrt(var);
+    return s + (s < l)*l;
+}
+
+static double cdf(int x, double mean, double std)
+{
+    return 0.5*(1 + erf((x - mean)/sqrt(2*std*std)));
+}
+
+static double inter_(cluster *a, cluster *b)
 {
     double m = a->mean, v = a->var;
-    double i = b->mean + 2*sqrt(b->var), j = b->mean - 2*sqrt(b->var);
-    return cdf(i, m, v) - cdf(j, m, v) > 0.025;
+    double s1 = adj_std(a->mean, a->var);
+    double s2 = adj_std(b->mean, b->var);
+    double i = b->mean + 2*s2, j = b->mean - 2*s2;
+    return cdf(i, m, s1) - cdf(j, m, s1);
+}
+
+static double inter(cluster *a, cluster *b)
+{
+    return max(inter_(a, b), inter_(b, a));
 }
 
 void do_cluster(int samples[30])
@@ -107,17 +125,24 @@ void do_cluster(int samples[30])
 
     while (modified) {
         modified = 0;
+        cluster *c1 = NULL, *c2 = NULL;
+        double max_inter = 0.025;
         for (i = 0; i < SZ; i++) {
             cluster *a = &clusters[i];
             if (!a->count) continue;
             for (j = i+1; j < SZ; j++) {
                 cluster *b = &clusters[j];
-                if (b->count && within(a, b)) {
-                    merge_clusters(a, b);
+                if (!b->count) continue;
+                double dist = inter(a, b);
+                if (dist > max_inter) {
+                    max_inter = dist;
+                    c1 = a;
+                    c2 = b;
                     modified = 1;
                 }
             }
         }
+        if (modified) merge_clusters(c1, c2);
     }
 
     // print clusters
