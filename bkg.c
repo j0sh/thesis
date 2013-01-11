@@ -44,17 +44,14 @@ int main(int argc, char **argv)
     IplImage *sub, *mask, *nmask, *gray, *gray8, *masked;
     char *fname = "bbb.mkv";
     //char *fname = "/home/josh/Desktop/irene.mkv";
+    char *windows[] = { "diffavg", "diff", "smoothed", "actual",
+        "1st derivative", "2nd derivative (Laplacian)", "masked" };
+    int nb_w = sizeof(windows)/sizeof(char*), i;
 
     capture_t ctx = {0};
     ctx.filename = fname;
     start_capture(&ctx);
-    cvNamedWindow("diffavg", 1);
-    cvNamedWindow("diff", 1);
-    cvNamedWindow("smoothed", 1);
-    cvNamedWindow("actual", 1);
-    cvNamedWindow("1st derivative", 1);
-    cvNamedWindow("2nd derivative (Laplacian)", 1);
-    cvNamedWindow("masked", 1);
+    for (i = 0; i < nb_w; i++) cvNamedWindow(windows[i], 1);
     CvSize size = { .width = ctx.img->width,
                     .height = ctx.img->height };
     avg = cvCreateImage(size, IPL_DEPTH_32F, 3);
@@ -70,13 +67,11 @@ int main(int argc, char **argv)
     mask = cvCreateImage(size, IPL_DEPTH_8U, 1);
     nmask = cvCreateImage(size, IPL_DEPTH_8U, 1);
     masked = cvCreateImage(size, IPL_DEPTH_8U, 3);
-    cvMoveWindow("diffavg", 0, 0);
-    cvMoveWindow("diff", size.width, 0);
-    cvMoveWindow("smoothed", 2*size.width, 0);
-    cvMoveWindow("actual", 3*size.width, 0);
-    cvMoveWindow("1st derivative", 0, size.height+50);
-    cvMoveWindow("2nd derivative (Laplacian)", size.width, size.height+50);
-    cvMoveWindow("masked", 2*size.width, size.height+50);
+    for (i = 0; i < nb_w; i++) {
+        int x = size.width  * (i % 4);
+        int y = (i >= 4) * (size.height + 50);
+        cvMoveWindow(windows[i], x, y);
+    }
     while (1) {
         IplImage *img = capture_frame(&ctx);
         if (!img) goto realerr;
@@ -118,13 +113,7 @@ int main(int argc, char **argv)
         cvCopy(i32, prev, NULL);
         if ((cvWaitKey(1)&255)==27) break; // esc
     }
-    cvDestroyWindow("diff");
-    cvDestroyWindow("diffavg");
-    cvDestroyWindow("smoothed");
-    cvDestroyWindow("actual");
-    cvDestroyWindow("1st derivative");
-    cvDestroyWindow("2nd derivative (Laplacian)");
-    cvDestroyWindow("masked");
+    for (i = 0; i < nb_w; i++) cvDestroyWindow(windows[i]);
     stop_capture(&ctx);
     cvReleaseImage(&avg);
     cvReleaseImage(&i32);
