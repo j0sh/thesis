@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
+#include <limits.h>
 
 typedef struct kd_node {
-    void *value;
+    int *value;
     struct kd_node *left;
     struct kd_node *right;
 } kd_node;
@@ -13,113 +15,33 @@ typedef struct kd_tree {
     kd_node *root;
 } kd_tree;
 
-static void kdt_insert_internal(kd_tree *t, kd_node *n, int depth)
-{
-}
-
-void kdt_insert(kd_tree *t, kd_node *n)
-{
-    kdt_insert_internal(t, n, 0);
-}
-
 inline static int kdt_compar(const void *a, const void *b, void *opaque)
 {
-    return (*(int*)a - *(int*)b);
+    int off = *(int*)opaque;
+    return ((int*)a)[off] - ((int*)b)[off];
 }
 
-typedef int (*msort_compar)(const void *, const void *, void*);
-
-static void msort_merge(void *a, void *b, void *end, int stride, msort_compar compar, void *opaque, void *tmp)
+static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
+    int depth, int *order)
 {
-    void *aend = b, *c = tmp;
-    while (a < aend && b < end) {
-        if (kdt_compar(a, b, opaque) <= 0) {
-            memcpy(c, a, stride);
-            a += stride;
-        } else {
-            memcpy(c, b, stride);
-            b += stride;
-        }
-        c += stride;
-    }
-    if (a < aend) memcpy(c, a, aend - a);
-    if (b < end) memcpy(c, b, end - b);
-}
-
-// from glibc qsort
-#define SWAP(a, b, size)                    \
-  do                                        \
-    {                                       \
-      register size_t __size = (size);      \
-      register char *__a = (a), *__b = (b); \
-      do                                    \
-    {                                       \
-      char __tmp = *__a;                    \
-      *__a++ = *__b;                        \
-      *__b++ = __tmp;                       \
-    } while (--__size > 0);                 \
-    } while (0)
-
-void msort_in(void *arr, int size, int stride, msort_compar compar, void *opaque, void *tmp)
-{
-    void *a = arr;
-    int sz = size*stride;
-    if (size <= 32) {
-        // use in-place insertion sort for small arrays
-        int i;
-        for (i = stride; i < sz; i+= stride) {
-            int j;
-            for (j = i; j >= stride && kdt_compar(a+j-stride, a+j, opaque) > 0; j-= stride) {
-                SWAP(a+j-stride, a+j, stride);
-            }
-        }
-        return;
-    }
-    int hsz = size/2*stride; // the /2 in this order is impt for odds
-    msort_in(a, size/2, stride, compar, opaque, tmp);
-    msort_in(a+hsz, size - size/2, stride, compar, opaque, tmp+hsz);
-    msort_merge(a, a+hsz, a+sz, stride, compar, opaque, tmp);
-    memcpy(arr, tmp, sz);
-}
-
-#undef SWAP
-
-void msort(void *arr, int size, int stride, msort_compar compar, void *opaque)
-{
-    void *tmp = malloc(size*stride);
-    msort_in(arr, size, stride, compar, opaque, tmp);
-    free(tmp);
-}
-
-static int qs_compar(const void *a, const void *b)
-{
-    return (*(int*)a - *(int*)b);
-}
-
-static kd_node *kdt_new_internal(kd_tree *t, int *points, int nb_points, int depth)
-{
-    int axis = depth % t->k, i, j, median;
+    if (0 == nb_points) return NULL;
+    int axis = order[depth % t->k], median;
     kd_node *node = malloc(sizeof(kd_node));
 
-    /*int *sorted = malloc(nb_points*sizeof(int));
-
-    // quicksort test
-    for (i = depth, j = 0; i < t->k*nb_points; i+= t->k) {
-        sorted[j] = points[i];
-        j += 1;
-    }
-    qsort(sorted, j, sizeof(int), qs_compar);
-    free(sorted);*/
-    qsort(points, nb_points, depth*sizeof(int), qs_compar);
-    //msort(points, nb_points, depth*sizeof(int), kdt_compar, &axis);
+    qsort_r(points, nb_points, t->k*sizeof(int), &kdt_compar, &axis);
+    median = nb_points/2;
+    node->value = points+median*t->k;
+    node->left = kdt_new_in(t, points, median, depth + 1, order);
+    node->right = kdt_new_in(t, points+(median+1)*t->k, nb_points - median - 1, depth+1, order);
 
     return node;
 }
 
-kd_node* kdt_new(kd_tree *t, int *points, int nb_points, int k)
+void kdt_new(kd_tree *t, int *points, int nb_points, int k,
+    int *order)
 {
-    t->k = k;
-    return kdt_new_internal(t, points, nb_points, k);
+    t->k = k; // dimensionality
+    t->root = kdt_new_in(t, points, nb_points, k, order);
 }
 
 #include <sys/time.h>
@@ -130,28 +52,93 @@ static inline double get_time()
     return t.tv_sec + t.tv_usec * 1e-6;
 }
 
-int main(int argc, char **argv)
+void print_kdtree(kd_node *node, int k, int depth, int *order)
 {
-    int sz = 200000000, depth = 200, *a = malloc(sz * sizeof(int));
-    //int sz = 10000000, depth = 1, *a = malloc(sz * sizeof(int));
+    int i;
+    printf("(%d) ", order[depth%k]);
+    for (i = 0; i < depth; i++) {
+        printf(" ");
+    }
+    int *val = node->value;
+    for (i = 0; i < k; i++) {
+        printf("%d ", val[i]);
+    }
+    printf("\n");
+    if (node->left) print_kdtree(node->left, k, depth+1, order);
+    if (node->right) print_kdtree(node->right, k, depth+1, order);
+}
+
+typedef struct {
+    int min, max, diff, idx;
+} dimstats;
+
+static inline int dim_compar(const void *a, const void *b)
+{
+    return ((dimstats*)a)->diff - ((dimstats*)b)->diff;
+}
+
+static int* calc_dimstats(int *points, int nb, int dim)
+{
     int i, j;
-    for (i = 0; i < sz; i += depth) {
-        for (j = 0; j < depth; j++) a[i + j] = rand() % 262144;
+    dimstats *d = malloc(dim*sizeof(dimstats));
+    for (j = 0; j < dim; j++) {
+        (d+j)->min = INT_MAX;
+        (d+j)->max = INT_MIN;
+        (d+j)->diff = INT_MAX;
+        (d+j)->idx = j;
+    }
+    for (i = 0; i < nb; i++) {
+        for (j = 0; j < dim; j++) {
+            int v = *points++;
+            dimstats *ds = d+j;
+            if (v < ds->min) ds->min = v;
+            if (v > ds->max) ds->max = v;
+        }
     }
 
+    for (j = 0; j < dim; j++) {
+        dimstats *ds = d+j;
+        ds->diff = ds->max - ds->min;
+    }
+    qsort(d, dim, sizeof(dimstats), &dim_compar);
+    int *order = malloc(dim*sizeof(int));
+    printf("Ordering: ");
+    for (j = 0; j < dim; j++) {
+        order[j] = (d+j)->idx;
+        printf("%d ", (d+j)->idx);
+    }
+    printf("\n");
+    return order;
+}
+
+int main()
+{
+    //int sz = 240000000, dim = 24, *a = malloc(sz * sizeof(int));
+    int sz = 50, dim = 10, *a = malloc(sz*sizeof(int));
+    int i, j;
+    for (i = 0; i < sz; i += dim) {
+        for (j = 0; j < dim; j++) a[i + j] = rand() % 262144;
+    }
+
+    int *order = calc_dimstats(a, sz/dim, dim);
     kd_tree kdt;
     double start = get_time(), end;
-    kdt_new(&kdt, a, sz/depth, depth);
+    kdt_new(&kdt, a, sz/dim, dim, order);
     end = get_time() - start;
 
-    for (i = depth; i < sz; i += depth) {
-        if (a[i - depth] > a[i]) {
-            printf("SORT FAILED got %d (%d) > %d (%d)\n", a[i - depth], i - depth, a[i], i);
-            exit(0);
+    for (i = 0; i < sz; i+= dim) {
+        printf("(");
+        for (j = 0; j < dim; j++) {
+            printf("%d ", a[i+j]);
         }
-        //printf("(%d %d) ", a[i+ 0], a[i + 1]);
+        printf(")\n ");
     }
+
+    printf("\n\n");
+    print_kdtree(kdt.root, kdt.k, 0, order);
+
     printf("\nelapsed %f ms\n", end*1000);
     free(a);
+    free(order);
     return 0;
 }
