@@ -6,6 +6,7 @@
 
 typedef struct kd_node {
     int *value;
+    int nb;
     struct kd_node *left;
     struct kd_node *right;
 } kd_node;
@@ -28,11 +29,18 @@ static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
     int axis = order[depth % t->k], median;
     kd_node *node = malloc(sizeof(kd_node));
 
+    if (nb_points <= 8) {
+        node->value = points;
+        node->left = node->right = NULL;
+        node->nb = nb_points;
+        return node;
+    }
     qsort_r(points, nb_points, t->k*sizeof(int), &kdt_compar, &axis);
     median = nb_points/2;
     node->value = points+median*t->k;
     node->left = kdt_new_in(t, points, median, depth + 1, order);
     node->right = kdt_new_in(t, points+(median+1)*t->k, nb_points - median - 1, depth+1, order);
+    node->nb = 1;
 
     return node;
 }
