@@ -4,6 +4,11 @@
 #include <string.h>
 #include <limits.h>
 
+#include <opencv2/imgproc/imgproc_c.h>
+#include <opencv2/highgui/highgui_c.h>
+
+#include "wht.h"
+
 typedef struct kd_node {
     int *value;
     int nb;
@@ -119,34 +124,104 @@ static int* calc_dimstats(int *points, int nb, int dim)
     return order;
 }
 
+void quantize(IplImage *img, int n, int *buf, int width)
+{
+    int i, j, k = n*n;
+    int stride = img->widthStep/sizeof(int16_t), *qd = buf;
+    int16_t *data = (int16_t*)img->imageData;
+    if (!n) memset(data, 0, img->imageSize);
+    if (k > width) {
+        fprintf(stderr, "quantize: n must be < sqrt(width)\n");
+        return;
+    }
+    int q = 0;
+    for (i = 0; i < img->height; i+= 1) {
+        if (i%8>=n) continue;
+        for (j = 0; j < img->width; j+= 1) {
+            if ((i%8 < n) && (j%8 < n)) {
+                *qd++ = *(data+i*stride+j);
+                k -= 1;
+                q+=1;
+                if (!k) {
+                    k = n*n;
+                    buf += width;
+                    qd = buf;
+                }
+            }
+        }
+    }
+}
+
+static IplImage *alignedImage(CvSize dim, int depth, int chan, int align)
+{
+    int w = dim.width, h = dim.height;
+    int dx = align - (w % align), dy =  align - (h % align);
+    w += (dx != align) * dx;
+    h += (dy != align) * dy; // really unnecessary
+    CvSize s = {w, h};
+    return cvCreateImage(s, depth, chan);
+}
+
+
+static IplImage *alignedImageFrom(char *file, int align)
+{
+    IplImage *pre = cvLoadImage(file, CV_LOAD_IMAGE_COLOR);
+    IplImage *img = alignedImage(cvGetSize(pre), pre->depth, pre->nChannels, align);
+    char *pre_data = pre->imageData;
+    char *img_data = img->imageData;
+    int i;
+    for (i = 0; i < pre->height; i++) {
+        memcpy(img_data, pre_data, pre->widthStep);
+        img_data += img->widthStep;
+        pre_data += pre->widthStep;
+    }
+    cvReleaseImage(&pre);
+    return img;
+}
+
+
 int main()
 {
-    //int sz = 240000000, dim = 24, *a = malloc(sz * sizeof(int));
-    int sz = 50, dim = 10, *a = malloc(sz*sizeof(int));
-    int i, j;
-    for (i = 0; i < sz; i += dim) {
-        for (j = 0; j < dim; j++) a[i + j] = rand() % 262144;
-    }
+    IplImage *img = alignedImageFrom("eva.jpg", 8);
+    CvSize size = cvGetSize(img);
+    IplImage *lab = cvCreateImage(size, IPL_DEPTH_8U, 3);
+    IplImage *l = cvCreateImage(size, IPL_DEPTH_8U, 1);
+    IplImage *a = cvCreateImage(size, IPL_DEPTH_8U, 1);
+    IplImage *b = cvCreateImage(size, IPL_DEPTH_8U, 1);
+    IplImage *trans = cvCreateImage(size, IPL_DEPTH_16S, 1);
 
-    int *order = calc_dimstats(a, sz/dim, dim);
+    int dim = 27, sz = (size.width*size.height/64)*dim;
+    int *buf = malloc(sizeof(int)*sz);
+
     kd_tree kdt;
+
+    cvShowImage("img", img);
+
+    cvCvtColor(img, lab, CV_BGR2Lab);
+    cvSplit(lab, l, a, b, NULL);
+
+    wht2d(l, trans);
+    quantize(trans, 5, buf, dim);
+
+    wht2d(a, trans);
+    quantize(trans, 1, buf+25, dim);
+
+    wht2d(b, trans);
+    quantize(trans, 1, buf+26, dim);
+
     double start = get_time(), end;
-    kdt_new(&kdt, a, sz/dim, dim, order);
+    int *order = calc_dimstats(buf, sz/dim, dim);
+    kdt_new(&kdt, buf, sz/dim, dim, order);
     end = get_time() - start;
 
-    for (i = 0; i < sz; i+= dim) {
-        printf("(");
-        for (j = 0; j < dim; j++) {
-            printf("%d ", a[i+j]);
-        }
-        printf(")\n ");
-    }
-
-    printf("\n\n");
-    print_kdtree(kdt.root, kdt.k, 0, order);
-
     printf("\nelapsed %f ms\n", end*1000);
-    free(a);
+    cvWaitKey(0);
+    free(buf);
     free(order);
+    cvReleaseImage(&img);
+    cvReleaseImage(&lab);
+    cvReleaseImage(&l);
+    cvReleaseImage(&a);
+    cvReleaseImage(&b);
     return 0;
 }
