@@ -50,6 +50,15 @@ static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
     return node;
 }
 
+static void kdt_cleanup(kd_node **n)
+{
+    kd_node *m = *n;
+    if (m->left) kdt_cleanup(&m->left);
+    if (m->right) kdt_cleanup(&m->right);
+    free(m);
+    *n = NULL;
+}
+
 void kdt_new(kd_tree *t, int *points, int nb_points, int k,
     int *order)
 {
@@ -92,7 +101,7 @@ static inline int dim_compar(const void *a, const void *b)
 
 static int* calc_dimstats(int *points, int nb, int dim)
 {
-    int i, j;
+    int i, j, *order = malloc(dim*sizeof(int));
     dimstats *d = malloc(dim*sizeof(dimstats));
     for (j = 0; j < dim; j++) {
         (d+j)->min = INT_MAX;
@@ -114,13 +123,13 @@ static int* calc_dimstats(int *points, int nb, int dim)
         ds->diff = ds->max - ds->min;
     }
     qsort(d, dim, sizeof(dimstats), &dim_compar);
-    int *order = malloc(dim*sizeof(int));
     printf("Ordering: ");
     for (j = 0; j < dim; j++) {
         order[j] = (d+j)->idx;
         printf("%d ", (d+j)->idx);
     }
     printf("\n");
+    free(d);
     return order;
 }
 
@@ -216,6 +225,7 @@ int main()
 
     printf("\nelapsed %f ms\n", end*1000);
     cvWaitKey(0);
+    kdt_cleanup(&kdt.root);
     free(buf);
     free(order);
     cvReleaseImage(&img);
