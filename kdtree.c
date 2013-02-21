@@ -21,6 +21,21 @@ typedef struct kd_tree {
     kd_node *root;
 } kd_tree;
 
+static int calc_dist(int *coeffs, kd_node *n, int k)
+{
+    int i, j, d = 0;
+    int *v = n->value, *u;
+    for (i = 0; i < n->nb; i++) {
+        u = coeffs;
+        for (j = 0; j < k; j++) {
+            int a = *v++;
+            int b = *u++;
+            d += (a - b)*(a - b);
+        }
+    }
+    return d/(n->nb*k);
+}
+
 inline static int kdt_compar(const void *a, const void *b, void *opaque)
 {
     int off = *(int*)opaque;
@@ -48,6 +63,25 @@ static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
     node->nb = 1;
 
     return node;
+}
+
+static kd_node* kdt_query_in(kd_node *n, int depth, int* qd,
+    int *order, int dim)
+{
+    int k = order[depth%dim];
+    if (n->left == NULL && n->right == NULL) return n;
+    if (!calc_dist(qd, n, dim)) return n;
+    if (n->left && qd[k] <= n->value[k])
+        return kdt_query_in(n->left, depth+1, qd, order, dim);
+    else if (n->right && qd[k] > n->value[k])
+        return kdt_query_in(n->right, depth+1, qd, order, dim);
+    fprintf(stderr, "This path should never be taken\n");
+    return n;
+}
+
+kd_node* kdt_query(kd_tree *t, int *points, int *order)
+{
+    return kdt_query_in(t->root, 0, points, order, t->k);
 }
 
 static void kdt_cleanup(kd_node **n)
@@ -188,6 +222,26 @@ static IplImage *alignedImageFrom(char *file, int align)
     return img;
 }
 
+static void query_img(kd_tree *t, int *coeffs, int *order, CvSize s)
+{
+    int i, j, k = t->k;
+    CvSize size = {s.width/8, s.height/8};
+    IplImage *img = cvCreateImage(size, IPL_DEPTH_16U, 1);
+    uint16_t *data = (uint16_t*)img->imageData, *line;
+    cvNamedWindow("queried", 0);
+    cvResizeWindow("queried", s.width, s.height);
+    for (i = 0; i < img->height; i++) {
+        line = data;
+        for (j = 0; j < img->width; j++) {
+            kd_node *n = kdt_query(t, coeffs, order);
+            int dist = calc_dist(coeffs, n, k);
+            *line++ = dist;
+            coeffs += k;
+        }
+        data += img->widthStep/sizeof(uint16_t);
+    }
+    cvShowImage("queried", img);
+}
 
 int main()
 {
@@ -222,6 +276,8 @@ int main()
     int *order = calc_dimstats(buf, sz/dim, dim);
     kdt_new(&kdt, buf, sz/dim, dim, order);
     end = get_time() - start;
+
+    query_img(&kdt, buf, order, size);
 
     printf("\nelapsed %f ms\n", end*1000);
     cvWaitKey(0);
