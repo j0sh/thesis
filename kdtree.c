@@ -243,22 +243,18 @@ static void query_img(kd_tree *t, int *coeffs, int *order, CvSize s)
     cvShowImage("queried", img);
 }
 
-int main()
+static int* get_coeffs(IplImage *img, int dim)
 {
-    IplImage *img = alignedImageFrom("eva.jpg", 8);
+    if (dim != 27) return NULL; // temporary; nothing else supported
+
     CvSize size = cvGetSize(img);
     IplImage *lab = cvCreateImage(size, IPL_DEPTH_8U, 3);
     IplImage *l = cvCreateImage(size, IPL_DEPTH_8U, 1);
     IplImage *a = cvCreateImage(size, IPL_DEPTH_8U, 1);
     IplImage *b = cvCreateImage(size, IPL_DEPTH_8U, 1);
     IplImage *trans = cvCreateImage(size, IPL_DEPTH_16S, 1);
-
-    int dim = 27, sz = (size.width*size.height/64)*dim;
+    int sz = size.width*size.height/64*dim;
     int *buf = malloc(sizeof(int)*sz);
-
-    kd_tree kdt;
-
-    cvShowImage("img", img);
 
     cvCvtColor(img, lab, CV_BGR2Lab);
     cvSplit(lab, l, a, b, NULL);
@@ -271,6 +267,27 @@ int main()
 
     wht2d(b, trans);
     quantize(trans, 1, buf+26, dim);
+
+    cvReleaseImage(&trans);
+    cvReleaseImage(&lab);
+    cvReleaseImage(&l);
+    cvReleaseImage(&a);
+    cvReleaseImage(&b);
+
+    return buf;
+}
+
+int main()
+{
+    IplImage *img = alignedImageFrom("eva.jpg", 8);
+    CvSize size = cvGetSize(img);
+
+    int dim = 27, sz = (size.width*size.height/64)*dim;
+    int *buf = get_coeffs(img, dim);
+
+    kd_tree kdt;
+
+    cvShowImage("img", img);
 
     double start = get_time(), end;
     int *order = calc_dimstats(buf, sz/dim, dim);
@@ -285,9 +302,5 @@ int main()
     free(buf);
     free(order);
     cvReleaseImage(&img);
-    cvReleaseImage(&lab);
-    cvReleaseImage(&l);
-    cvReleaseImage(&a);
-    cvReleaseImage(&b);
     return 0;
 }
