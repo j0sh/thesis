@@ -9,6 +9,9 @@
 
 #include "wht.h"
 
+// maximum # of candidates per leaf
+#define LEAF_CANDS 8
+
 typedef struct kd_node {
     int *value;
     int nb;
@@ -49,7 +52,7 @@ static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
     int axis = order[depth % t->k], median;
     kd_node *node = malloc(sizeof(kd_node));
 
-    if (nb_points <= 8) {
+    if (nb_points <= LEAF_CANDS) {
         node->value = points;
         node->left = node->right = NULL;
         node->nb = nb_points;
@@ -58,6 +61,12 @@ static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
     qsort_r(points, nb_points, t->k*sizeof(int), &kdt_compar, &axis);
     median = nb_points/2;
     node->value = points+median*t->k;
+    while ((points+(median+1)*t->k)[axis] == node->value[axis]) {
+        // make nodes with the same value as the median at the axis
+        // fall on the left side of the tree by bumping up the median
+        node->value += t->k;
+        median += 1;
+    }
     node->left = kdt_new_in(t, points, median, depth + 1, order);
     node->right = kdt_new_in(t, points+(median+1)*t->k, nb_points - median - 1, depth+1, order);
     node->nb = 1;
@@ -70,7 +79,7 @@ static kd_node* kdt_query_in(kd_node *n, int depth, int* qd,
 {
     int k = order[depth%dim];
     if (n->left == NULL && n->right == NULL) return n;
-    if (!calc_dist(qd, n, dim)) return n;
+    if (!memcmp(qd, n->value, dim*sizeof(int))) return n;
     if (n->left && qd[k] <= n->value[k])
         return kdt_query_in(n->left, depth+1, qd, order, dim);
     else if (n->right && qd[k] > n->value[k])
@@ -97,7 +106,7 @@ void kdt_new(kd_tree *t, int *points, int nb_points, int k,
     int *order)
 {
     t->k = k; // dimensionality
-    t->root = kdt_new_in(t, points, nb_points, k, order);
+    t->root = kdt_new_in(t, points, nb_points, 0, order);
 }
 
 #include <sys/time.h>
@@ -177,14 +186,12 @@ void quantize(IplImage *img, int n, int *buf, int width)
         fprintf(stderr, "quantize: n must be < sqrt(width)\n");
         return;
     }
-    int q = 0;
     for (i = 0; i < img->height; i+= 1) {
         if (i%8>=n) continue;
         for (j = 0; j < img->width; j+= 1) {
             if ((i%8 < n) && (j%8 < n)) {
                 *qd++ = *(data+i*stride+j);
                 k -= 1;
-                q+=1;
                 if (!k) {
                     k = n*n;
                     buf += width;
@@ -241,6 +248,7 @@ static void query_img(kd_tree *t, int *coeffs, int *order, CvSize s)
         data += img->widthStep/sizeof(uint16_t);
     }
     cvShowImage("queried", img);
+    cvReleaseImage(&img);
 }
 
 static int* get_coeffs(IplImage *img, int dim)
