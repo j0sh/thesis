@@ -251,6 +251,101 @@ static void query_img(kd_tree *t, int *coeffs, int *order, CvSize s)
     cvReleaseImage(&img);
 }
 
+static void dequantize(IplImage *img, int n, int *buf, int width)
+{
+    int i, j, k = n*n, *qd = buf;
+    int stride = img->widthStep/sizeof(int16_t);
+    int16_t *data = (int16_t*)img->imageData;
+    for (i = 0; i < img->height; i++) {
+        if (i%8 >= n) continue;
+        for (j = 0; j < img->width; j++) {
+            if ((i%8 < n) && (j%8 < n)) {
+                *(data+i*stride+j) = *qd++;
+                k -= 1;
+                if (!k) {
+                    k = n*n;
+                    buf += width;
+                    qd = buf;
+                }
+            }
+        }
+    }
+}
+
+static IplImage* splat(int *coeffs, CvSize size, int dim)
+{
+    if (dim != 27) return NULL; // temporary; nothing else supported
+
+    IplImage *l = cvCreateImage(size, IPL_DEPTH_16S, 1);
+    IplImage *a = cvCreateImage(size, IPL_DEPTH_16S, 1);
+    IplImage *b = cvCreateImage(size, IPL_DEPTH_16S, 1);
+    IplImage *lab = cvCreateImage(size, IPL_DEPTH_16S, 3);
+    IplImage *lab8= cvCreateImage(size, IPL_DEPTH_8U, 3);
+    IplImage *img = cvCreateImage(size, IPL_DEPTH_8U, 3);
+    IplImage *trans = cvCreateImage(size, IPL_DEPTH_16S, 1);
+
+    memset(trans->imageData, 0, trans->imageSize);
+    dequantize(trans, 5, coeffs, dim);
+    iwht2d(trans, l);
+    memset(trans->imageData, 0, trans->imageSize);
+    dequantize(trans, 1, coeffs+25, dim);
+    iwht2d(trans, a);
+    memset(trans->imageData, 0, trans->imageSize);
+    dequantize(trans, 1, coeffs+26, dim);
+    iwht2d(trans, b);
+
+    cvMerge(l, a, b, NULL, lab);
+    cvConvertScale(lab, lab8, 1, 0);
+    cvCvtColor(lab8, img, CV_Lab2BGR);
+
+    cvReleaseImage(&l);
+    cvReleaseImage(&a);
+    cvReleaseImage(&b);
+    cvReleaseImage(&lab);
+    cvReleaseImage(&lab8);
+    cvReleaseImage(&trans);
+    return img;
+}
+
+
+static void find_best_match(int *coeffs, int *newcoeffs, kd_node *n, int k)
+{
+    int i, j, best = INT_MAX, *u, *v;
+    for (i = 0; i < n->nb; i++) {
+        int dist = 0;
+        u = coeffs;
+        v = n->value+i*k;
+        for (j = 0; j < k; j++) {
+            int a = *u++;
+            int b = *v++;
+            dist += (a - b)*(a - b);
+        }
+        if (dist < best) {
+            memcpy(newcoeffs, n->value+i*k, k*sizeof(int));
+            best = dist;
+        }
+    }
+}
+
+static IplImage* match(kd_tree *t, int *coeffs, int *order, CvSize s)
+{
+    int i, j, k = t->k;
+    CvSize size = {s.width/8, s.height/8};
+    int *newcoeffs = malloc(sizeof(int)*size.width*size.height*k);
+    int *c = newcoeffs;
+    for (i = 0; i < size.height; i++) {
+        for (j = 0; j < size.width; j++) {
+            kd_node *n = kdt_query(t, coeffs, order);
+            find_best_match(coeffs, newcoeffs, n, k);
+            coeffs += k;
+            newcoeffs += k;
+        }
+    }
+    IplImage *img = splat(c, s, k);
+    free(c);
+    return img;
+}
+
 static int* get_coeffs(IplImage *img, int dim)
 {
     if (dim != 27) return NULL; // temporary; nothing else supported
@@ -287,28 +382,41 @@ static int* get_coeffs(IplImage *img, int dim)
 
 int main()
 {
-    IplImage *img = alignedImageFrom("eva.jpg", 8);
-    CvSize size = cvGetSize(img);
+    IplImage *src = alignedImageFrom("lena.png", 8);
+    IplImage *dst = alignedImageFrom("eva.jpg", 8);
+    CvSize size = cvGetSize(src);
 
     int dim = 27, sz = (size.width*size.height/64)*dim;
-    int *buf = get_coeffs(img, dim);
+    int *c1 = get_coeffs(src, dim);
+    int *c2 = get_coeffs(dst, dim);
+    int *c3 = malloc(sz*sizeof(int));
+    int *c4 = malloc(dst->width*dst->height/64*dim*sizeof(int));
 
     kd_tree kdt;
 
-    cvShowImage("img", img);
+    cvShowImage("img", src);
 
     double start = get_time(), end;
-    int *order = calc_dimstats(buf, sz/dim, dim);
-    kdt_new(&kdt, buf, sz/dim, dim, order);
+    int *order = calc_dimstats(c1, sz/dim, dim);
+    memcpy(c3, c1, sz*sizeof(int));
+    memcpy(c4, c2, dst->width*dst->height/64*dim*sizeof(int));
+    kdt_new(&kdt, c1, sz/dim, dim, order);
     end = get_time() - start;
 
-    query_img(&kdt, buf, order, size);
+    //IplImage *matched = match(&kdt, c4, order, cvGetSize(dst));
+    IplImage *matched = match(&kdt, c3, order, size);
 
+    cvShowImage("matched", matched);
     printf("\nelapsed %f ms\n", end*1000);
     cvWaitKey(0);
     kdt_cleanup(&kdt.root);
-    free(buf);
+    free(c1);
+    free(c2);
+    free(c3);
+    free(c4);
     free(order);
-    cvReleaseImage(&img);
+    cvReleaseImage(&src);
+    cvReleaseImage(&dst);
+    cvReleaseImage(&matched);
     return 0;
 }
