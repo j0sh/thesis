@@ -12,9 +12,14 @@
 // maximum # of candidates per leaf
 #define LEAF_CANDS 8
 
+#define XY_TO_INT(x, y) (((y) << 16) | (x))
+#define XY_TO_X(x) ((x)&((1<<16)-1))
+#define XY_TO_Y(y) ((y)>>16)
+
 typedef struct kd_node {
     int *value;
     int nb;
+    int xy[LEAF_CANDS];
     struct kd_node *left;
     struct kd_node *right;
 } kd_node;
@@ -346,6 +351,36 @@ static IplImage* match(kd_tree *t, int *coeffs, int *order, CvSize s)
     return img;
 }
 
+static int find_match_idx(int *coeffs, kd_node *n, int k)
+{
+    int i, *v = n->value;
+    for (i = 0; i < n->nb; i++) {
+        if (!memcmp(coeffs, v, k*sizeof(int))) return i;
+        v += k;
+    }
+    return -1; // no match found
+}
+
+static kd_node** get_positions(kd_tree *t, int *coeffs,
+    int *order, CvSize s)
+{
+    int i, j;
+    CvSize size = {s.width/8, s.height/8};
+    kd_node **nodes = malloc(size.width*size.height*sizeof(kd_node*));
+    kd_node **n = nodes;
+    for (i = 0; i < size.height; i++) {
+        for (j = 0; j < size.width; j++) {
+            kd_node *kdn = kdt_query(t, coeffs, order);
+            int idx = find_match_idx(coeffs, kdn, t->k);
+            if (-1 == idx) fprintf(stderr, "Bad offset index\n");
+            else kdn->xy[idx] = XY_TO_INT(j, i);
+            *n++ = kdn;
+            coeffs += t->k;
+        }
+    }
+    return nodes;
+}
+
 static int* get_coeffs(IplImage *img, int dim)
 {
     if (dim != 27) return NULL; // temporary; nothing else supported
@@ -403,12 +438,14 @@ int main()
     kdt_new(&kdt, c1, sz/dim, dim, order);
     end = get_time() - start;
 
+    kd_node **pos = get_positions(&kdt, c3, order, size);
     //IplImage *matched = match(&kdt, c4, order, cvGetSize(dst));
     IplImage *matched = match(&kdt, c3, order, size);
 
     cvShowImage("matched", matched);
     printf("\nelapsed %f ms\n", end*1000);
     cvWaitKey(0);
+    free(pos);
     kdt_cleanup(&kdt.root);
     free(c1);
     free(c2);
