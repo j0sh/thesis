@@ -27,6 +27,7 @@ typedef struct kd_node {
 typedef struct kd_tree {
     int k;
     int *order;
+    int *points;
     kd_node *root;
 } kd_tree;
 
@@ -112,6 +113,7 @@ static void kdt_free(kd_tree *t)
 {
     free(t->order);
     kdt_free_in(&t->root);
+    free(t->points);
 }
 
 typedef struct {
@@ -159,9 +161,11 @@ static int* calc_dimstats(int *points, int nb, int dim)
 
 void kdt_new(kd_tree *t, int *points, int nb_points, int k)
 {
+    t->points = malloc(nb_points*k*sizeof(int));
+    memcpy(t->points, points, nb_points*k*sizeof(int));
     t->k = k; // dimensionality
-    t->order = calc_dimstats(points, nb_points, k);
-    t->root = kdt_new_in(t, points, nb_points, 0);
+    t->order = calc_dimstats(t->points, nb_points, k);
+    t->root = kdt_new_in(t, t->points, nb_points, 0);
 }
 
 #include <sys/time.h>
@@ -430,22 +434,18 @@ int main()
     int dim = 27, sz = (size.width*size.height/64)*dim;
     int *c1 = get_coeffs(src, dim);
     int *c2 = get_coeffs(dst, dim);
-    int *c3 = malloc(sz*sizeof(int));
-    int *c4 = malloc(dst->width*dst->height/64*dim*sizeof(int));
 
     kd_tree kdt;
 
     cvShowImage("img", src);
 
     double start = get_time(), end;
-    memcpy(c3, c1, sz*sizeof(int));
-    memcpy(c4, c2, dst->width*dst->height/64*dim*sizeof(int));
     kdt_new(&kdt, c1, sz/dim, dim);
     end = get_time() - start;
 
-    kd_node **pos = get_positions(&kdt, c3, size);
-    //IplImage *matched = match(&kdt, c4, cvGetSize(dst));
-    IplImage *matched = match(&kdt, c3, size);
+    kd_node **pos = get_positions(&kdt, c1, size);
+    //IplImage *matched = match(&kdt, c2, cvGetSize(dst));
+    IplImage *matched = match(&kdt, c1, size);
 
     cvShowImage("matched", matched);
     printf("\nelapsed %f ms\n", end*1000);
@@ -454,8 +454,6 @@ int main()
     kdt_free(&kdt);
     free(c1);
     free(c2);
-    free(c3);
-    free(c4);
     cvReleaseImage(&src);
     cvReleaseImage(&dst);
     cvReleaseImage(&matched);
