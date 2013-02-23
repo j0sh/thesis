@@ -26,6 +26,7 @@ typedef struct kd_node {
 
 typedef struct kd_tree {
     int k;
+    int *order;
     kd_node *root;
 } kd_tree;
 
@@ -51,10 +52,10 @@ inline static int kdt_compar(const void *a, const void *b, void *opaque)
 }
 
 static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
-    int depth, int *order)
+    int depth)
 {
     if (0 == nb_points) return NULL;
-    int axis = order[depth % t->k], median;
+    int axis = t->order[depth % t->k], median;
     kd_node *node = malloc(sizeof(kd_node));
 
     if (nb_points <= LEAF_CANDS) {
@@ -72,8 +73,8 @@ static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
         node->value += t->k;
         median += 1;
     }
-    node->left = kdt_new_in(t, points, median, depth + 1, order);
-    node->right = kdt_new_in(t, points+(median+1)*t->k, nb_points - median - 1, depth+1, order);
+    node->left = kdt_new_in(t, points, median, depth + 1);
+    node->right = kdt_new_in(t, points+(median+1)*t->k, nb_points - median - 1, depth+1);
     node->nb = 1;
 
     return node;
@@ -93,49 +94,24 @@ static kd_node* kdt_query_in(kd_node *n, int depth, int* qd,
     return n;
 }
 
-kd_node* kdt_query(kd_tree *t, int *points, int *order)
+kd_node* kdt_query(kd_tree *t, int *points)
 {
-    return kdt_query_in(t->root, 0, points, order, t->k);
+    return kdt_query_in(t->root, 0, points, t->order, t->k);
 }
 
-static void kdt_cleanup(kd_node **n)
+static void kdt_free_in(kd_node **n)
 {
     kd_node *m = *n;
-    if (m->left) kdt_cleanup(&m->left);
-    if (m->right) kdt_cleanup(&m->right);
+    if (m->left) kdt_free_in(&m->left);
+    if (m->right) kdt_free_in(&m->right);
     free(m);
     *n = NULL;
 }
 
-void kdt_new(kd_tree *t, int *points, int nb_points, int k,
-    int *order)
+static void kdt_free(kd_tree *t)
 {
-    t->k = k; // dimensionality
-    t->root = kdt_new_in(t, points, nb_points, 0, order);
-}
-
-#include <sys/time.h>
-static inline double get_time()
-{
-    struct timeval t;
-    gettimeofday(&t, NULL);
-    return t.tv_sec + t.tv_usec * 1e-6;
-}
-
-void print_kdtree(kd_node *node, int k, int depth, int *order)
-{
-    int i;
-    printf("(%d) ", order[depth%k]);
-    for (i = 0; i < depth; i++) {
-        printf(" ");
-    }
-    int *val = node->value;
-    for (i = 0; i < k; i++) {
-        printf("%d ", val[i]);
-    }
-    printf("\n");
-    if (node->left) print_kdtree(node->left, k, depth+1, order);
-    if (node->right) print_kdtree(node->right, k, depth+1, order);
+    free(t->order);
+    kdt_free_in(&t->root);
 }
 
 typedef struct {
@@ -179,6 +155,37 @@ static int* calc_dimstats(int *points, int nb, int dim)
     printf("\n");
     free(d);
     return order;
+}
+
+void kdt_new(kd_tree *t, int *points, int nb_points, int k)
+{
+    t->k = k; // dimensionality
+    t->order = calc_dimstats(points, nb_points, k);
+    t->root = kdt_new_in(t, points, nb_points, 0);
+}
+
+#include <sys/time.h>
+static inline double get_time()
+{
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    return t.tv_sec + t.tv_usec * 1e-6;
+}
+
+void print_kdtree(kd_node *node, int k, int depth, int *order)
+{
+    int i;
+    printf("(%d) ", order[depth%k]);
+    for (i = 0; i < depth; i++) {
+        printf(" ");
+    }
+    int *val = node->value;
+    for (i = 0; i < k; i++) {
+        printf("%d ", val[i]);
+    }
+    printf("\n");
+    if (node->left) print_kdtree(node->left, k, depth+1, order);
+    if (node->right) print_kdtree(node->right, k, depth+1, order);
 }
 
 void quantize(IplImage *img, int n, int *buf, int width)
@@ -234,7 +241,7 @@ static IplImage *alignedImageFrom(char *file, int align)
     return img;
 }
 
-static void query_img(kd_tree *t, int *coeffs, int *order, CvSize s)
+static void query_img(kd_tree *t, int *coeffs, CvSize s)
 {
     int i, j, k = t->k;
     CvSize size = {s.width/8, s.height/8};
@@ -245,7 +252,7 @@ static void query_img(kd_tree *t, int *coeffs, int *order, CvSize s)
     for (i = 0; i < img->height; i++) {
         line = data;
         for (j = 0; j < img->width; j++) {
-            kd_node *n = kdt_query(t, coeffs, order);
+            kd_node *n = kdt_query(t, coeffs);
             int dist = calc_dist(coeffs, n, k);
             *line++ = dist;
             coeffs += k;
@@ -332,7 +339,7 @@ static void find_best_match(int *coeffs, int *newcoeffs, kd_node *n, int k)
     }
 }
 
-static IplImage* match(kd_tree *t, int *coeffs, int *order, CvSize s)
+static IplImage* match(kd_tree *t, int *coeffs, CvSize s)
 {
     int i, j, k = t->k;
     CvSize size = {s.width/8, s.height/8};
@@ -340,7 +347,7 @@ static IplImage* match(kd_tree *t, int *coeffs, int *order, CvSize s)
     int *c = newcoeffs;
     for (i = 0; i < size.height; i++) {
         for (j = 0; j < size.width; j++) {
-            kd_node *n = kdt_query(t, coeffs, order);
+            kd_node *n = kdt_query(t, coeffs);
             find_best_match(coeffs, newcoeffs, n, k);
             coeffs += k;
             newcoeffs += k;
@@ -361,8 +368,7 @@ static int find_match_idx(int *coeffs, kd_node *n, int k)
     return -1; // no match found
 }
 
-static kd_node** get_positions(kd_tree *t, int *coeffs,
-    int *order, CvSize s)
+static kd_node** get_positions(kd_tree *t, int *coeffs, CvSize s)
 {
     int i, j;
     CvSize size = {s.width/8, s.height/8};
@@ -370,7 +376,7 @@ static kd_node** get_positions(kd_tree *t, int *coeffs,
     kd_node **n = nodes;
     for (i = 0; i < size.height; i++) {
         for (j = 0; j < size.width; j++) {
-            kd_node *kdn = kdt_query(t, coeffs, order);
+            kd_node *kdn = kdt_query(t, coeffs);
             int idx = find_match_idx(coeffs, kdn, t->k);
             if (-1 == idx) fprintf(stderr, "Bad offset index\n");
             else kdn->xy[idx] = XY_TO_INT(j, i);
@@ -432,26 +438,24 @@ int main()
     cvShowImage("img", src);
 
     double start = get_time(), end;
-    int *order = calc_dimstats(c1, sz/dim, dim);
     memcpy(c3, c1, sz*sizeof(int));
     memcpy(c4, c2, dst->width*dst->height/64*dim*sizeof(int));
-    kdt_new(&kdt, c1, sz/dim, dim, order);
+    kdt_new(&kdt, c1, sz/dim, dim);
     end = get_time() - start;
 
-    kd_node **pos = get_positions(&kdt, c3, order, size);
-    //IplImage *matched = match(&kdt, c4, order, cvGetSize(dst));
-    IplImage *matched = match(&kdt, c3, order, size);
+    kd_node **pos = get_positions(&kdt, c3, size);
+    //IplImage *matched = match(&kdt, c4, cvGetSize(dst));
+    IplImage *matched = match(&kdt, c3, size);
 
     cvShowImage("matched", matched);
     printf("\nelapsed %f ms\n", end*1000);
     cvWaitKey(0);
     free(pos);
-    kdt_cleanup(&kdt.root);
+    kdt_free(&kdt);
     free(c1);
     free(c2);
     free(c3);
     free(c4);
-    free(order);
     cvReleaseImage(&src);
     cvReleaseImage(&dst);
     cvReleaseImage(&matched);
