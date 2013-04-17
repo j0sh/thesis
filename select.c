@@ -3,62 +3,67 @@
 #include <string.h>
 #include <time.h>
 
-static void swap(int *a, int *b)
-{
-    int c = *a;
-    *a = *b;
-    *b = c;
-}
+/*
+ *  This Quickselect routine is based on the algorithm described in
+ *  "Numerical recipes in C", Second Edition,
+ *  Cambridge University Press, 1992, Section 8.5, ISBN 0-521-43108-5
+ *  This code by Nicolas Devillard - 1998. Public domain.
+ */
 
-static void partition(int *start, int* med, int *end)
+#define ELEM_SWAP(a,b) { register int t=(a);(a)=(b);(b)=t; }
+
+int quick_select(int arr[], int n)
 {
-    int median = *med;
-    swap(med, end);
-    int i, j = -1, size = end - start;
-    for (i = 0; i < size; i++) {
-        if (start[i] <= median) {
-            j += 1;
-            swap(start+i, start+j);
+    int low, high ;
+    int median;
+    int middle, ll, hh;
+
+    low = 0 ; high = n-1 ; median = (low + high) / 2;
+    for (;;) {
+        if (high <= low) /* One element only */
+            return arr[median] ;
+
+        if (high == low + 1) {  /* Two elements only */
+            if (arr[low] > arr[high])
+                ELEM_SWAP(arr[low], arr[high]) ;
+            return arr[median] ;
         }
+
+    /* Find median of low, middle and high items; swap into position low */
+    middle = (low + high) / 2;
+    if (arr[middle] > arr[high])    ELEM_SWAP(arr[middle], arr[high]) ;
+    if (arr[low] > arr[high])       ELEM_SWAP(arr[low], arr[high]) ;
+    if (arr[middle] > arr[low])     ELEM_SWAP(arr[middle], arr[low]) ;
+
+    /* Swap low item (now in position middle) into position (low+1) */
+    ELEM_SWAP(arr[middle], arr[low+1]) ;
+
+    /* Nibble from each end towards middle, swapping items when stuck */
+    ll = low + 1;
+    hh = high;
+    for (;;) {
+        do ll++; while (arr[low] > arr[ll]) ;
+        do hh--; while (arr[hh]  > arr[low]) ;
+
+        if (hh < ll)
+        break;
+
+        ELEM_SWAP(arr[ll], arr[hh]) ;
     }
-    swap(end, start+j);
+
+    /* Swap middle item (in position low) back into correct position */
+    ELEM_SWAP(arr[low], arr[hh]) ;
+
+    /* Re-set active partition */
+    if (hh <= median)
+        low = ll;
+        if (hh >= median)
+        high = hh - 1;
+    }
 }
 
-static int* get_median(int *a, int size)
-{
-    // use in-place insertion sort for small arrays
-    int i;
-    for (i = 1; i < size; i++) {
-        int v = a[i];
-        int hole = i;
-        while (hole > 0 && v < a[hole - 1]) {
-            a[hole] = a[hole - 1];
-            hole -= 1;
-        }
-        a[hole] = v;
-    }
-    return a + size/2;
-}
+#undef ELEM_SWAP
 
-static int* mom_in(int *data, int size)
-{
-    int i, nb = size/5, last = size % 5, *median;
-    nb += last ? 1 : 0; // add one more for the leftover
-    if (!last) last = 5;
-    if (1 == nb) return get_median(data, last);
-    for (i = 0; i < nb; i++) {
-        median = get_median(data + i * 5, (i == nb-1) ? last : 5);
-        swap(data + i, median);
-    }
-    return mom_in(data, nb);
-}
-
-int median_of_medians(int *data, int size)
-{
-    int *median = mom_in(data, size), med = *median;
-    partition(data, median, data + size);
-    return med;
-}
 
 static int compare(const void *a, const void *b)
 {
@@ -71,9 +76,9 @@ int main()
     srand(time(NULL));
     for (j = 0; j < 10000; j++) {
     for (i = 0; i < sz; i++) data[i] = rand() % 100;
-    median = median_of_medians(data, sz);
+    median = quick_select(data, sz);
     qsort(data, sz, sizeof(int), compare);
-    if (median == data[sz/2]) r++;
+    if (median == data[sz/2 - !(sz & 1)]) r++;
     }
     printf("correct: %d, pct %f\n", r, (float)r/10000 * 100);
     return 0;
