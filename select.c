@@ -3,6 +3,27 @@
 #include <string.h>
 #include <time.h>
 
+static void swap(int *a, int *b)
+{
+    int c = *a;
+    *a = *b;
+    *b = c;
+}
+
+static void partition(int *start, int* med, int *end)
+{
+    int median = *med;
+    swap(med, end);
+    int i, j = -1, size = end - start;
+    for (i = 0; i < size; i++) {
+        if (start[i] <= median) {
+            j += 1;
+            swap(start+i, start+j);
+        }
+    }
+    swap(end, start+j);
+}
+
 static int get_median(int *a, int size)
 {
     // use in-place insertion sort for small arrays
