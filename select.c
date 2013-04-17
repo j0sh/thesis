@@ -24,7 +24,7 @@ static void partition(int *start, int* med, int *end)
     swap(end, start+j);
 }
 
-static int get_median(int *a, int size)
+static int* get_median(int *a, int size)
 {
     // use in-place insertion sort for small arrays
     int i;
@@ -37,29 +37,27 @@ static int get_median(int *a, int size)
         }
         a[hole] = v;
     }
-    return a[size/2];
+    return a + size/2;
 }
 
-static int mom_in(int *data, int size, int *medians)
+static int* mom_in(int *data, int size)
 {
-    int i, nb = size/5, last = size % 5;
+    int i, nb = size/5, last = size % 5, *median;
     nb += last ? 1 : 0; // add one more for the leftover
     if (!last) last = 5;
     if (1 == nb) return get_median(data, last);
     for (i = 0; i < nb; i++) {
-        medians[i] = get_median(data + i * 5, i == nb ? last : 5);
+        median = get_median(data + i * 5, (i == nb-1) ? last : 5);
+        swap(data + i, median);
     }
-    return mom_in(medians, nb, medians);
+    return mom_in(data, nb);
 }
 
 int median_of_medians(int *data, int size)
 {
-    int nb = size/5, median, *medians;
-    nb += nb % 5 ? 1 : 0;
-    medians = malloc(nb * sizeof(int));
-    median = mom_in(data, size, medians);
-    free(medians);
-    return median;
+    int *median = mom_in(data, size), med = *median;
+    partition(data, median, data + size);
+    return med;
 }
 
 static int compare(const void *a, const void *b)
@@ -69,11 +67,14 @@ static int compare(const void *a, const void *b)
 
 int main()
 {
-    int i, median, data[100], sz = sizeof(data)/sizeof(int);
+    int i, j, median, data[100], sz = sizeof(data)/sizeof(int), r = 0;
     srand(time(NULL));
+    for (j = 0; j < 10000; j++) {
     for (i = 0; i < sz; i++) data[i] = rand() % 100;
     median = median_of_medians(data, sz);
     qsort(data, sz, sizeof(int), compare);
-    printf("\nmedian of medians %d sorted %d\n", median, data[sz/2]);
+    if (median == data[sz/2]) r++;
+    }
+    printf("correct: %d, pct %f\n", r, (float)r/10000 * 100);
     return 0;
 }
