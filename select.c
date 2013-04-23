@@ -64,7 +64,30 @@ int quick_select(int arr[], int n)
 
 #undef ELEM_SWAP
 
+static int *swap_buf = NULL, swap_n = 0;   // quite hackish
+static void swap_nd(int *a, int *b)
+{
+    memcpy(swap_buf, a, swap_n);
+    memcpy(a, b, swap_n);
+    memcpy(b, swap_buf, swap_n);
+}
 
+int pivot_nd(int *a, int sz, int dim, int axis, int p)
+{
+    // In-place pivot around p along a given axis of n-dimensions.
+    // The resulting array will have two parts: elements from
+    // 0...p and elements greater than p. Returns the index of
+    // the first element greater than p.
+    int i = 0, j = sz - 1;
+    while (1) {
+        while (i < sz && a[i*dim+axis] <= p) i++;
+        while (j >= 0 && a[j*dim+axis] > p) j--;
+        if (j <= i) return i*dim;
+        swap_nd(a+i*dim, a+j*dim);
+    }
+}
+
+#if 1
 static int compare(const void *a, const void *b)
 {
     return (*(int*)a - *(int*)b);
@@ -83,3 +106,4 @@ int main()
     printf("correct: %d, pct %f\n", r, (float)r/10000 * 100);
     return 0;
 }
+#endif
