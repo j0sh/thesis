@@ -251,6 +251,29 @@ static int* gck_calc_2d(uint8_t *data, int w, int h, int kern_size, int bases)
     return res;
 }
 
+int* gck_valid_data(int *data, int w, int h,
+    int kern_size, int bases)
+{
+    // returns data from non-padded areas
+    int kw = w + kern_size - 1, i, j, kh = h + kern_size - 1;
+    int rw = w - kern_size + 1, rh = h - kern_size + 1;
+    int *a = malloc(bases*rw*rh*sizeof(int)), *dst = a, *src = data;
+    if (!a) {
+        fprintf(stderr, "Unable to malloc in valid_data\n");
+        return NULL;
+    }
+    for  (j = 0; j < bases; j++) {
+        src = data + kw*kh*j;
+        src += kw * (kern_size - 1) + kern_size - 1;
+        for (i = 0; i < rh; i++) {
+            memcpy(dst, src, rw*sizeof(int));
+            dst += rw;
+            src += kw;
+        }
+    }
+    return a;
+}
+
 static void prep_data(uint8_t *data, int w, int h)
 {
     int i, j;
@@ -297,13 +320,16 @@ static void print_bases(int *data, int w, int h,
 #if 1
 int main()
 {
-    int *res;
+    int *res, *valid_res;
     uint8_t data[W*H];
 
     prep_data(data, W, H);
     res = gck_calc_2d(data, W, H, KERN_LEN, BASES);
+    valid_res = gck_valid_data(res, W, H, KERN_LEN, BASES);
     print_bases(res, W, H, KERN_LEN, BASES);
+    print_bases(valid_res, W-KERN_LEN+1, H-KERN_LEN+1, 1, BASES);
     free(res);
+    free(valid_res);
 
     return 0;
 }
