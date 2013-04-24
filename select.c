@@ -65,6 +65,23 @@ int quick_select(int arr[], int n)
 #undef ELEM_SWAP
 
 static int *swap_buf = NULL, swap_n = 0;   // quite hackish
+int set_swap_buf(int dim)
+{
+    int sz = dim*sizeof(int);
+    if (swap_buf) free(swap_buf);
+    swap_buf = malloc(sz);
+    if (!swap_buf) return -1;
+    swap_n = sz;
+    return 1;
+}
+
+void free_swap_buf()
+{
+    if (swap_buf) free(swap_buf);
+    swap_buf = NULL;
+    swap_n = 0;
+}
+
 static void swap_nd(int *a, int *b)
 {
     memcpy(swap_buf, a, swap_n);
