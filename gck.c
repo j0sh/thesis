@@ -226,7 +226,7 @@ static int gck_direction(GCKPoint *p1, GCKPoint *p2)
     return 1;
 }
 
-static int* gck_calc_2d(uint8_t *data, int w, int h, int kern_size, int bases)
+int* gck_calc_2d(uint8_t *data, int w, int h, int kern_size, int bases)
 {
     int i, wh = (w+kern_size - 1) * (h + kern_size - 1);
     int size = wh * bases;
@@ -337,7 +337,7 @@ static void print_bases(int *data, int w, int h,
 #define KERN_LEN 4
 #define BASES 16
 
-#if 1
+#if 0
 int main()
 {
     int *res, *valid_res, *interleaved;
