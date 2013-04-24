@@ -274,6 +274,26 @@ int* gck_valid_data(int *data, int w, int h,
     return a;
 }
 
+int* gck_interleave_data(int *data, int w, int h, int bases)
+{
+    // takes AAAABBBBCCCC -> ABCABCABCABC
+    int i, j, k, *a = malloc(w*h*bases*sizeof(int));
+    if (!a) {
+        fprintf(stderr, "Unable to malloc in interleave_data\n");
+        return NULL;
+    }
+    for (k = 0; k < bases; k++) {
+        for (i = 0; i < h; i++) {
+            for (j = 0; j < w; j++) {
+                int n = i*w+j;
+                a[n*bases + k] = data[n];
+            }
+        }
+        data += w*h;
+    }
+    return a;
+}
+
 static void prep_data(uint8_t *data, int w, int h)
 {
     int i, j;
@@ -320,16 +340,20 @@ static void print_bases(int *data, int w, int h,
 #if 1
 int main()
 {
-    int *res, *valid_res;
+    int *res, *valid_res, *interleaved;
     uint8_t data[W*H];
 
     prep_data(data, W, H);
     res = gck_calc_2d(data, W, H, KERN_LEN, BASES);
     valid_res = gck_valid_data(res, W, H, KERN_LEN, BASES);
+    interleaved = gck_interleave_data(valid_res,
+                    W-KERN_LEN+1, H-KERN_LEN+1, BASES);
     print_bases(res, W, H, KERN_LEN, BASES);
     print_bases(valid_res, W-KERN_LEN+1, H-KERN_LEN+1, 1, BASES);
+    print_bases(interleaved, KERN_LEN, KERN_LEN, 1, BASES);
     free(res);
     free(valid_res);
+    free(interleaved);
 
     return 0;
 }
