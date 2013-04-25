@@ -251,7 +251,7 @@ int* gck_calc_2d(uint8_t *data, int w, int h, int kern_size, int bases)
     return res;
 }
 
-void gck_valid_data(int *data, int w, int h,
+void gck_truncate_data(int *data, int w, int h,
     int kern_size, int bases, int *dst)
 {
     // returns data from non-padded areas
@@ -349,7 +349,7 @@ int main()
     interleaved = gck_alloc_buffer(VW, VH, 1, BASES);
     prep_data(data, W, H);
     res = gck_calc_2d(data, W, H, KERN_LEN, BASES);
-    gck_valid_data(res, W, H, KERN_LEN, BASES, valid_res);
+    gck_truncate_data(res, W, H, KERN_LEN, BASES, valid_res);
     gck_interleave_data(valid_res, VW, VH, BASES, interleaved);
     print_bases(res, W, H, KERN_LEN, BASES);
     print_bases(valid_res, VW, VH, 1, BASES);
