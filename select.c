@@ -3,6 +3,14 @@
 #include <string.h>
 #include <time.h>
 
+static int *swap_buf = NULL, swap_n = 0;   // quite hackish
+static void swap(int *a, int *b)
+{
+    memcpy(swap_buf, a, swap_n);
+    memcpy(a, b, swap_n);
+    memcpy(b, swap_buf, swap_n);
+}
+
 /*
  *  This Quickselect routine is based on the algorithm described in
  *  "Numerical recipes in C", Second Edition,
@@ -10,49 +18,53 @@
  *  This code by Nicolas Devillard - 1998. Public domain.
  */
 
-#define ELEM_SWAP(a,b) { register int t=(a);(a)=(b);(b)=t; }
-
-int quick_select(int arr[], int n)
+int *quick_select(int arr[], int n, int dim, int axis)
 {
-    int low, high ;
+    int low, high;
     int median;
     int middle, ll, hh;
 
     low = 0 ; high = n-1 ; median = (low + high) / 2;
     for (;;) {
         if (high <= low) /* One element only */
-            return arr[median] ;
+            return arr+median*dim;
 
         if (high == low + 1) {  /* Two elements only */
-            if (arr[low] > arr[high])
-                ELEM_SWAP(arr[low], arr[high]) ;
-            return arr[median] ;
+            if (arr[low*dim + axis] > arr[high*dim + axis])
+                swap(arr+low*dim, arr+high*dim);
+            return arr+median*dim;
         }
 
     /* Find median of low, middle and high items; swap into position low */
     middle = (low + high) / 2;
-    if (arr[middle] > arr[high])    ELEM_SWAP(arr[middle], arr[high]) ;
-    if (arr[low] > arr[high])       ELEM_SWAP(arr[low], arr[high]) ;
-    if (arr[middle] > arr[low])     ELEM_SWAP(arr[middle], arr[low]) ;
+    if (arr[middle*dim + axis] > arr[high*dim + axis]) {
+        swap(arr+middle*dim, arr+high*dim);
+    }
+    if (arr[low*dim + axis] > arr[high*dim + axis]) {
+        swap(arr+low*dim, arr+high*dim);
+    }
+    if (arr[middle*dim + axis] > arr[low*dim + axis]) {
+        swap(arr+middle*dim, arr+low*dim);
+    }
 
     /* Swap low item (now in position middle) into position (low+1) */
-    ELEM_SWAP(arr[middle], arr[low+1]) ;
+    swap(arr+middle*dim, arr+(low+1)*dim);
 
     /* Nibble from each end towards middle, swapping items when stuck */
     ll = low + 1;
     hh = high;
     for (;;) {
-        do ll++; while (arr[low] > arr[ll]) ;
-        do hh--; while (arr[hh]  > arr[low]) ;
+        do ll++; while (arr[low*dim+axis] > arr[ll*dim+axis]);
+        do hh--; while (arr[hh*dim+axis]  > arr[low*dim+axis]);
 
         if (hh < ll)
         break;
 
-        ELEM_SWAP(arr[ll], arr[hh]) ;
+        swap(arr+ll*dim, arr+hh*dim);
     }
 
     /* Swap middle item (in position low) back into correct position */
-    ELEM_SWAP(arr[low], arr[hh]) ;
+    swap(arr+low*dim, arr+hh*dim);
 
     /* Re-set active partition */
     if (hh <= median)
@@ -62,9 +74,6 @@ int quick_select(int arr[], int n)
     }
 }
 
-#undef ELEM_SWAP
-
-static int *swap_buf = NULL, swap_n = 0;   // quite hackish
 int set_swap_buf(int dim)
 {
     int sz = dim*sizeof(int);
@@ -82,28 +91,6 @@ void free_swap_buf()
     swap_n = 0;
 }
 
-static void swap_nd(int *a, int *b)
-{
-    memcpy(swap_buf, a, swap_n);
-    memcpy(a, b, swap_n);
-    memcpy(b, swap_buf, swap_n);
-}
-
-int pivot_nd(int *a, int sz, int dim, int axis, int p)
-{
-    // In-place pivot around p along a given axis of n-dimensions.
-    // The resulting array will have two parts: elements from
-    // 0...p and elements greater than p. Returns the index of
-    // the first element greater than p.
-    int i = 0, j = sz - 1;
-    while (1) {
-        while (i < sz && a[i*dim+axis] <= p) i++;
-        while (j >= 0 && a[j*dim+axis] > p) j--;
-        if (j <= i) return i*dim;
-        swap_nd(a+i*dim, a+j*dim);
-    }
-}
-
 #if 1
 static int compare(const void *a, const void *b)
 {
@@ -112,13 +99,13 @@ static int compare(const void *a, const void *b)
 
 int main()
 {
-    int i, j, median, data[100], sz = sizeof(data)/sizeof(int), r = 0;
+    int i, j,*median, data[100], sz = sizeof(data)/sizeof(int), r = 0;
     srand(time(NULL));
     for (j = 0; j < 10000; j++) {
     for (i = 0; i < sz; i++) data[i] = rand() % 100;
     median = quick_select(data, sz);
     qsort(data, sz, sizeof(int), compare);
-    if (median == data[sz/2 - !(sz & 1)]) r++;
+    if (*median == data[sz/2 - !(sz & 1)]) r++;
     }
     printf("correct: %d, pct %f\n", r, (float)r/10000 * 100);
     return 0;
