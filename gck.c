@@ -155,7 +155,7 @@ static void gck_2d_vert(int *cur, int a, int *prev, int b,
     int c = gck_gc(a), d = gck_gc(b);
     int prefix = gck_prefix(c, d, bits);
     int delta = 1 << prefix;
-    int sign = (c >> d) & 1;
+    int sign = (c >> (bits - prefix)) & 1;
     int *curd = cur, *prevd = prev;
     for (i = 0; i < delta; i++) {
         for (j = 0; j < wlen; j++) cur[j] = -prev[j];
