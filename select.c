@@ -3,6 +3,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "select.h"
+
 static int *swap_buf = NULL, swap_n = 0;   // quite hackish
 static void swap(int *a, int *b)
 {
@@ -96,7 +98,19 @@ void free_swap_buf()
     swap_n = 0;
 }
 
-#if 1
+void pivot_nd(int *a, int sz, int dim, int axis, int p)
+{
+    int i = 0, j = sz - 1;
+    while (1) {
+        while (i < sz && a[i*dim+axis] <= p) i++;
+        while (j >= 0 && a[j*dim+axis] > p) j--;
+        if (j <= i) break;
+        swap(a+i*dim, a+j*dim);
+    }
+}
+
+
+#if 0
 static int compare(const void *a, const void *b)
 {
     return (*(int*)a - *(int*)b);
