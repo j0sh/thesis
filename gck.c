@@ -233,7 +233,7 @@ int* gck_calc_2d(uint8_t *data, int w, int h, int kern_size, int bases)
     int *res = calloc(size, sizeof(int)); // TODO cacheline padding?
     GCKPoint adj, *path = malloc(bases * sizeof(GCKPoint));
     gck_path(path, kern_size, bases);
-    print_path(path, bases);
+    //print_path(path, bases);
 
     gck_2d_dc(data, res, w, h, kern_size);
     for (i = 1; i < bases; i++) {
@@ -294,6 +294,7 @@ int* gck_alloc_buffer(int w, int h, int kern_size, int bases)
     return res;
 }
 
+#if 0
 static void prep_data(uint8_t *data, int w, int h)
 {
     int i, j;
@@ -332,6 +333,23 @@ static void print_bases(int *data, int w, int h,
     }
 }
 
+static void weirdcase()
+{
+    uint8_t q[] = {163, 163, 165, 165, 167, 167, 165, 165, 163, 163, 165, 166, 163, 162, 163, 165, 164, 164, 164, 167, 164, 164, 163, 160, 164, 164, 165, 166, 167, 163, 159, 157, 165, 165, 165, 163, 165, 162, 166, 164, 165, 165, 165, 165, 168, 164, 165, 164, 166, 166, 167, 163, 164, 166, 166, 164, 166, 166, 167, 165, 163, 165, 165, 163};
+    int bases = 25;
+    int *valid_res, *res, *interleaved;
+    valid_res = gck_alloc_buffer(1, 1, 1, bases);
+    interleaved = gck_alloc_buffer(1, 1, 1, bases);
+    res = gck_calc_2d(q, 8, 8, 8, bases);
+    gck_truncate_data(res, 8, 8, 8, bases, valid_res);
+    gck_interleave_data(valid_res, 1, 1, bases, interleaved, bases);
+    print_bases(res, 8, 8, 8, bases);
+    print_bases(interleaved, bases, 1, 1, 1);
+    free(res);
+    free(valid_res);
+    free(interleaved);
+}
+
 #define W 8
 #define H 8
 #define KERN_LEN 4
@@ -339,7 +357,6 @@ static void print_bases(int *data, int w, int h,
 #define VW (W - KERN_LEN + 1)
 #define VH (H - KERN_LEN + 1)
 
-#if 0
 int main()
 {
     int *res, *valid_res, *interleaved;
@@ -357,6 +374,7 @@ int main()
     free(res);
     free(valid_res);
     free(interleaved);
+    //weirdcase();
 
     return 0;
 }
