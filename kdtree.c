@@ -7,7 +7,9 @@
 #include <opencv2/imgproc/imgproc_c.h>
 #include <opencv2/highgui/highgui_c.h>
 
+#include "gck.h"
 #include "wht.h"
+#include "select.h"
 
 // maximum # of candidates per leaf
 #define LEAF_CANDS 8
@@ -17,13 +19,14 @@
 #define XY_TO_Y(y) ((y)>>16)
 
 typedef struct kd_node {
-    int *value;
+    int val;
     int nb;
-    int xy[LEAF_CANDS];
+    int axis;
     struct kd_node *left;
     struct kd_node *right;
+    int *value;
+    int xy[LEAF_CANDS];
 } kd_node;
-
 typedef struct kd_tree {
     int k;
     int *order;
@@ -52,11 +55,23 @@ inline static int kdt_compar(const void *a, const void *b, void *opaque)
     return ((int*)a)[off] - ((int*)b)[off];
 }
 
-static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
-    int depth)
+static void print_tuple(int *a, int nb, int tsz)
 {
-    if (0 == nb_points) return NULL;
-    int axis = t->order[depth % t->k], median;
+    int i, j;
+    for (i = 0; i < nb; i++) {
+        fprintf(stderr, "{");
+        for (j = 0; j < tsz; j++) {
+            fprintf(stderr, "%d,", a[i*tsz + j]);
+        }
+        fprintf(stderr, "}\n");
+    }
+}
+
+static kd_node *kdt_new_in(kd_tree *t, int *points,
+    int nb_points, int depth)
+{
+    if (0 >= nb_points) return NULL;
+    int axis = t->order[depth % t->k], median, loops = 1;
     kd_node *node = malloc(sizeof(kd_node));
 
     if (nb_points <= LEAF_CANDS) {
@@ -65,15 +80,36 @@ static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
         node->nb = nb_points;
         return node;
     }
-    qsort_r(points, nb_points, t->k*sizeof(int), &kdt_compar, &axis);
-    median = nb_points/2;
+kdt_in:
+
+    median = quick_select(points, nb_points, t->k, axis);
     node->value = points+median*t->k;
-    while ((points+(median+1)*t->k)[axis] == node->value[axis]) {
+    node->val = node->value[axis];
+    node->axis = axis;
+
+    pivot_nd(points, nb_points, t->k, axis, node->val);
+
+    while ((nb_points - (median+1)) &&
+           (points+(median+1)*t->k)[axis] <= node->val) {
         // make nodes with the same value as the median at the axis
         // fall on the left side of the tree by bumping up the median
         node->value += t->k;
         median += 1;
     }
+    if (!(nb_points - (median+1))) {
+        depth += 1;
+        axis = t->order[depth % t->k];
+        loops++;
+        if (loops == t->k) {
+            // we have actually gone through every single element here
+            // and each dimension is the same as its neighbor
+            node->left = node->right = NULL;
+            node->nb = 1; // points are all the same
+            return node;
+        }
+        goto kdt_in;
+    }
+
     node->left = kdt_new_in(t, points, median, depth + 1);
     node->right = kdt_new_in(t, points+(median+1)*t->k, nb_points - median - 1, depth+1);
     node->nb = 1;
@@ -81,23 +117,23 @@ static kd_node *kdt_new_in(kd_tree *t, int *points, int nb_points,
     return node;
 }
 
-static kd_node* kdt_query_in(kd_node *n, int depth, int* qd,
-    int *order, int dim)
+static kd_node* kdt_query_in(kd_node *n, int depth, int* qd, int dim)
 {
-    int k = order[depth%dim];
+    int k = n->axis;
     if (n->left == NULL && n->right == NULL) return n;
     if (!memcmp(qd, n->value, dim*sizeof(int))) return n;
-    if (n->left && qd[k] <= n->value[k])
-        return kdt_query_in(n->left, depth+1, qd, order, dim);
-    else if (n->right && qd[k] > n->value[k])
-        return kdt_query_in(n->right, depth+1, qd, order, dim);
+    if (n->left && qd[k] <= n->val) {
+        return kdt_query_in(n->left, depth+1, qd, dim);
+    } else if (n->right && qd[k] > n->val) {
+        return kdt_query_in(n->right, depth+1, qd, dim);
+    }
     fprintf(stderr, "This path should never be taken\n");
     return n;
 }
 
 kd_node* kdt_query(kd_tree *t, int *points)
 {
-    return kdt_query_in(t->root, 0, points, t->order, t->k);
+    return kdt_query_in(t->root, 0, points, t->k);
 }
 
 static void kdt_free_in(kd_node **n)
@@ -111,9 +147,9 @@ static void kdt_free_in(kd_node **n)
 
 static void kdt_free(kd_tree *t)
 {
-    free(t->order);
+    if (t->order) free(t->order);
     kdt_free_in(&t->root);
-    free(t->points);
+    if (t->points) free(t->points);
 }
 
 typedef struct {
@@ -122,7 +158,7 @@ typedef struct {
 
 static inline int dim_compar(const void *a, const void *b)
 {
-    return ((dimstats*)a)->diff - ((dimstats*)b)->diff;
+    return ((dimstats*)b)->diff - ((dimstats*)a)->diff;
 }
 
 static int* calc_dimstats(int *points, int nb, int dim)
@@ -149,12 +185,12 @@ static int* calc_dimstats(int *points, int nb, int dim)
         ds->diff = ds->max - ds->min;
     }
     qsort(d, dim, sizeof(dimstats), &dim_compar);
-    printf("Ordering: ");
+    //printf("Ordering: ");
     for (j = 0; j < dim; j++) {
         order[j] = (d+j)->idx;
-        printf("%d ", (d+j)->idx);
+        //printf("%d ", (d+j)->idx);
     }
-    printf("\n");
+    //printf("\n");
     free(d);
     return order;
 }
@@ -192,28 +228,28 @@ void print_kdtree(kd_node *node, int k, int depth, int *order)
     if (node->right) print_kdtree(node->right, k, depth+1, order);
 }
 
-void quantize(IplImage *img, int n, int *buf, int width)
+void quantize(IplImage *img, int n, int kern, unsigned *order, int *buf, int dim)
 {
-    int i, j, k = n*n;
+    int i = 0, j = 0, k = 0;
     int stride = img->widthStep/sizeof(int16_t), *qd = buf;
     int16_t *data = (int16_t*)img->imageData;
     if (!n) memset(data, 0, img->imageSize);
-    if (k > width) {
-        fprintf(stderr, "quantize: n must be < sqrt(width)\n");
+    if (n > dim) {
+        fprintf(stderr, "quantize: n must be < elems\n");
         return;
     }
-    for (i = 0; i < img->height; i+= 1) {
-        if (i%8>=n) continue;
-        for (j = 0; j < img->width; j+= 1) {
-            if ((i%8 < n) && (j%8 < n)) {
-                *qd++ = *(data+i*stride+j);
-                k -= 1;
-                if (!k) {
-                    k = n*n;
-                    buf += width;
-                    qd = buf;
-                }
+
+    for (i = 0; i < img->height; i+= kern) {
+        for (j = 0; j < img->width; j+= kern) {
+            int16_t *block = data+(i*stride+j);
+            int *ql = qd;
+            for (k = 0; k < n; k++) {
+                int z = order[k];
+                int x = XY_TO_X(z);
+                int y = XY_TO_Y(z);
+                ql[k] = *(block+(y*stride+x));
             }
+            qd += dim;
         }
     }
 }
@@ -267,25 +303,82 @@ static void query_img(kd_tree *t, int *coeffs, CvSize s)
     cvReleaseImage(&img);
 }
 
-static void dequantize(IplImage *img, int n, int *buf, int width)
+static void dequantize(IplImage *img, int n, unsigned *order,
+    int kern, int *buf, int dim)
 {
-    int i, j, k = n*n, *qd = buf;
+    int i, j, k, *qd = buf;
     int stride = img->widthStep/sizeof(int16_t);
     int16_t *data = (int16_t*)img->imageData;
-    for (i = 0; i < img->height; i++) {
-        if (i%8 >= n) continue;
-        for (j = 0; j < img->width; j++) {
-            if ((i%8 < n) && (j%8 < n)) {
-                *(data+i*stride+j) = *qd++;
-                k -= 1;
-                if (!k) {
-                    k = n*n;
-                    buf += width;
-                    qd = buf;
-                }
+    for (i = 0; i < img->height; i+= kern) {
+        for (j = 0; j < img->width; j+= kern) {
+            int16_t *block = data+i*stride+j;
+            int *ql = qd;
+            for (k = 0; k < n; k++) {
+                int z = order[k];
+                int x = XY_TO_X(z);
+                int y = XY_TO_Y(z);
+                *(block+y*stride+x) = *ql++;
             }
+            qd += dim;
         }
     }
+}
+
+static int bitrev(unsigned int n, unsigned int bits)
+{
+    unsigned int i, nrev;// nrev will store the bit-reversed pattern
+    int N = 1<<bits;     // find N: shift left 1 by the number of bits
+    nrev = n;
+    for(i=1; i<bits; i++)
+    {
+        n >>= 1;
+        nrev <<= 1;
+        nrev |= n & 1;   // give LSB of n to nrev
+    }
+    nrev &= N-1;         // clear all bits more significant than N-1
+    return nrev;
+}
+
+static int gc(int a)
+{
+    return (a >> 1) ^ a;
+}
+
+static int nat2seq(int n, int bits)
+{
+    // go from natural ordering to sequency ordering:
+    // first take gray code encoding, then reverse those bits
+    return bitrev(gc(n), bits);
+}
+
+unsigned* build_path(int n, int kern)
+{
+    int i = 0, k = 0, bases = 0, b = log2(kern);
+    unsigned *order = malloc(n*sizeof(unsigned));
+    if (!order) {
+        fprintf(stderr, "quantize: unable to alloc!\n");
+        return NULL;
+    }
+    while (bases < n) {
+        int m, y, x;
+        if (i < kern) {
+            y = k;
+            x = 0;
+        } else {
+            y = kern - 1;
+            x = kern - k - 1;
+        }
+        for (m = 0; m < k+1; m++) {
+            order[bases] = XY_TO_INT(nat2seq(x, b), nat2seq(y, b));
+            bases++;
+            x++;
+            y--;
+            if (n == bases) break;
+        }
+        i++;
+        k += i < kern ? 1 : -1;
+    }
+    return order;
 }
 
 static IplImage* splat(int *coeffs, CvSize size, int dim)
@@ -299,15 +392,16 @@ static IplImage* splat(int *coeffs, CvSize size, int dim)
     IplImage *lab8= cvCreateImage(size, IPL_DEPTH_8U, 3);
     IplImage *img = cvCreateImage(size, IPL_DEPTH_8U, 3);
     IplImage *trans = cvCreateImage(size, IPL_DEPTH_16S, 1);
+    unsigned *order = build_path(25, 8);
 
     memset(trans->imageData, 0, trans->imageSize);
-    dequantize(trans, 5, coeffs, dim);
+    dequantize(trans, 25, order, 8, coeffs, dim);
     iwht2d(trans, l);
     memset(trans->imageData, 0, trans->imageSize);
-    dequantize(trans, 1, coeffs+25, dim);
+    dequantize(trans, 1, order, 8, coeffs+25, dim);
     iwht2d(trans, a);
     memset(trans->imageData, 0, trans->imageSize);
-    dequantize(trans, 1, coeffs+26, dim);
+    dequantize(trans, 1, order, 8, coeffs+26, dim);
     iwht2d(trans, b);
 
     cvMerge(l, a, b, NULL, lab);
@@ -320,9 +414,9 @@ static IplImage* splat(int *coeffs, CvSize size, int dim)
     cvReleaseImage(&lab);
     cvReleaseImage(&lab8);
     cvReleaseImage(&trans);
+    free(order);
     return img;
 }
-
 
 static void find_best_match(int *coeffs, int *newcoeffs, kd_node *n, int k)
 {
@@ -341,6 +435,16 @@ static void find_best_match(int *coeffs, int *newcoeffs, kd_node *n, int k)
             best = dist;
         }
     }
+}
+
+static int find_match_idx(int *coeffs, kd_node *n, int k)
+{
+    int i, *v = n->value;
+    for (i = 0; i < n->nb; i++) {
+        if (!memcmp(coeffs, v, k*sizeof(int))) return i;
+        v += k;
+    }
+    return -1; // no match found
 }
 
 static IplImage* match(kd_tree *t, int *coeffs, CvSize s)
@@ -362,16 +466,6 @@ static IplImage* match(kd_tree *t, int *coeffs, CvSize s)
     return img;
 }
 
-static int find_match_idx(int *coeffs, kd_node *n, int k)
-{
-    int i, *v = n->value;
-    for (i = 0; i < n->nb; i++) {
-        if (!memcmp(coeffs, v, k*sizeof(int))) return i;
-        v += k;
-    }
-    return -1; // no match found
-}
-
 static kd_node** get_positions(kd_tree *t, int *coeffs, CvSize s)
 {
     int i, j;
@@ -382,7 +476,10 @@ static kd_node** get_positions(kd_tree *t, int *coeffs, CvSize s)
         for (j = 0; j < size.width; j++) {
             kd_node *kdn = kdt_query(t, coeffs);
             int idx = find_match_idx(coeffs, kdn, t->k);
-            if (-1 == idx) fprintf(stderr, "Bad offset index\n");
+            if (-1 == idx) {
+                fprintf(stderr, "Bad offset index (%d,%d)", j, i);
+                print_tuple(coeffs, 1, t->k);
+            }
             else kdn->xy[idx] = XY_TO_INT(j, i);
             *n++ = kdn;
             coeffs += t->k;
@@ -391,8 +488,68 @@ static kd_node** get_positions(kd_tree *t, int *coeffs, CvSize s)
     return nodes;
 }
 
-static int* get_coeffs(IplImage *img, int dim)
+static int test_positions(kd_tree *t, int *coeffs, int nb)
 {
+    int i, errors = 0;
+    for (i = 0; i < nb; i++) {
+        kd_node *kdn = kdt_query(t, coeffs);
+        if (-1 == find_match_idx(coeffs, kdn, t->k)) {
+            fprintf(stderr, "Unable to find elem at %d", i);
+            print_tuple(coeffs, 1, t->k);
+            errors++;
+        }
+        coeffs += t->k;
+    }
+    return errors;
+}
+
+static void coeffs(IplImage *img, int bases, int total_b,
+    int *planar, int *interleaved)
+{
+    CvSize s = cvGetSize(img);
+    int w = s.width, h = s.height, rw = w - 8 + 1, rh = h - 8 + 1;
+    if (w != img->widthStep) {
+        fprintf(stderr, "image not aligned uh oh\n");
+        exit(1);
+    }
+    int *res = gck_calc_2d((uint8_t*)img->imageData, w, h, 8, bases);
+    gck_truncate_data(res, w, h, 8, bases, planar);
+    gck_interleave_data(planar, rw, rh, bases, interleaved, total_b);
+    free(res);
+}
+
+static void img_coeffs(IplImage *img, int dim, int **pl, int **in) {
+    if (dim != 27) return; // temporary; nothing else supported
+
+    CvSize size = cvGetSize(img);
+    IplImage *lab = cvCreateImage(size, IPL_DEPTH_8U, 3);
+    IplImage *l = cvCreateImage(size, IPL_DEPTH_8U, 1);
+    IplImage *a = cvCreateImage(size, IPL_DEPTH_8U, 1);
+    IplImage *b = cvCreateImage(size, IPL_DEPTH_8U, 1);
+    int w = size.width, h = size.height;
+    int rw = w - 8 + 1, rh = h - 8 + 1;
+    int *planar = gck_alloc_buffer(w, h, 8, dim);
+    int *interleaved = gck_alloc_buffer(w, h, 8, dim);
+
+    cvCvtColor(img, lab, CV_BGR2Lab);
+    cvSplit(lab, l, a, b, NULL);
+
+    coeffs(l, 25, 27, planar, interleaved);
+
+    coeffs(a, 1, 27, planar+(rw*rh*25), interleaved+25);
+
+    coeffs(b, 1, 27, planar+(rw*rh*26), interleaved+26);
+
+    cvReleaseImage(&lab);
+    cvReleaseImage(&l);
+    cvReleaseImage(&a);
+    cvReleaseImage(&b);
+
+    *pl = planar;
+    *in = interleaved;
+}
+
+static int* block_coeffs(IplImage *img, int dim) {
     if (dim != 27) return NULL; // temporary; nothing else supported
 
     CvSize size = cvGetSize(img);
@@ -403,59 +560,109 @@ static int* get_coeffs(IplImage *img, int dim)
     IplImage *trans = cvCreateImage(size, IPL_DEPTH_16S, 1);
     int sz = size.width*size.height/64*dim;
     int *buf = malloc(sizeof(int)*sz);
+    unsigned *order = build_path(25, 8);
 
     cvCvtColor(img, lab, CV_BGR2Lab);
     cvSplit(lab, l, a, b, NULL);
 
     wht2d(l, trans);
-    quantize(trans, 5, buf, dim);
+    quantize(trans, 25, 8, order, buf, dim);
 
     wht2d(a, trans);
-    quantize(trans, 1, buf+25, dim);
+    quantize(trans, 1, 8, order, buf+25, dim);
 
     wht2d(b, trans);
-    quantize(trans, 1, buf+26, dim);
+    quantize(trans, 1, 8, order, buf+26, dim);
 
     cvReleaseImage(&trans);
     cvReleaseImage(&lab);
     cvReleaseImage(&l);
     cvReleaseImage(&a);
     cvReleaseImage(&b);
+    free(order);
 
     return buf;
 }
 
-int main()
+static void test_coeffs()
+{
+    int t[] = {2, 3, 5, 4, 9, 6, 4, 7, 8, 1, 7, 2};
+    printf("t is %p sizeof(t) %d, %p, diff %d\n", t, sizeof(t), t+1, (t+1)-t);
+
+    kd_tree kdt;
+    if (!set_swap_buf(2)) exit(1);
+    kdt_new(&kdt, t, 6, 2);
+    print_kdtree(kdt.root, 2, 0, kdt.order);
+}
+
+static void test_wht()
 {
     IplImage *src = alignedImageFrom("lena.png", 8);
     IplImage *dst = alignedImageFrom("eva.jpg", 8);
     CvSize size = cvGetSize(src);
-
-    int dim = 27, sz = (size.width*size.height/64)*dim;
-    int *c1 = get_coeffs(src, dim);
-    int *c2 = get_coeffs(dst, dim);
-
+    int dim = 27, sz = size.width * size.height / 64;
+    int *c_dst, *c_src;
+    set_swap_buf(dim);
+    c_src = block_coeffs(src, dim);
+    c_dst = block_coeffs(dst, dim);
     kd_tree kdt;
-
     cvShowImage("img", src);
+    printf("building tree\n");
+    kdt_new(&kdt, c_src, sz, dim);
+    printf("finished building tree\n");
 
-    double start = get_time(), end;
-    kdt_new(&kdt, c1, sz/dim, dim);
-    end = get_time() - start;
-
-    kd_node **pos = get_positions(&kdt, c1, size);
-    //IplImage *matched = match(&kdt, c2, cvGetSize(dst));
-    IplImage *matched = match(&kdt, c1, size);
-
-    cvShowImage("matched", matched);
-    printf("\nelapsed %f ms\n", end*1000);
-    cvWaitKey(0);
+    kd_node **pos = get_positions(&kdt, c_src, size);
+    printf("got positions\n");
     free(pos);
+
+    //IplImage *matched = match(&kdt, c_src, cvGetSize(src));
+    //IplImage *matched = match(&kdt, c_dst, cvGetSize(dst));
+    //printf("got matches\n");
+    //cvShowImage("matched", matched);
+    cvWaitKey(0);
     kdt_free(&kdt);
-    free(c1);
-    free(c2);
+    free(c_dst);
+    free(c_src);
+    //cvReleaseImage(&matched);
     cvReleaseImage(&src);
     cvReleaseImage(&dst);
+
+}
+
+static void test_gck()
+{
+    IplImage *src = alignedImageFrom("lena.png", 8);
+    CvSize size = cvGetSize(src);
+    int w1 = size.width - 8 + 1, h1 = size.height - 8 + 1;
+    int dim = 27, sz = w1*h1;
+    int *p, *i, *c_src;
+    set_swap_buf(dim);
+    img_coeffs(src, dim, &p, &i);
+    c_src = block_coeffs(src, dim);
+    kd_tree kdt;
+    memset(&kdt, 0, sizeof(kdt));
+    cvShowImage("img", src);
+
+    kdt_new(&kdt, i, sz, dim);
+
+    int errors = test_positions(&kdt, i, sz);
+    printf("got positions with %d errors\n", errors);
+
+    IplImage *matched = match(&kdt, c_src, size);
+    cvShowImage("matched", matched);
+    cvWaitKey(0);
+    kdt_free(&kdt);
+    free(p);
+    free(i);
+    free(c_src);
     cvReleaseImage(&matched);
+    cvReleaseImage(&src);
+}
+
+int main()
+{
+    //test_wht();
+    test_gck();
+    //test_coeffs();
     return 0;
 }
