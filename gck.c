@@ -269,7 +269,7 @@ void gck_truncate_data(int *data, int w, int h,
     }
 }
 
-void gck_interleave_data(int *data, int w, int h, int bases, int *a)
+void gck_interleave_data(int *data, int w, int h, int bases, int *a, int aw)
 {
     // takes AAAABBBBCCCC -> ABCABCABCABC
     int i, j, k;
@@ -277,7 +277,7 @@ void gck_interleave_data(int *data, int w, int h, int bases, int *a)
         for (i = 0; i < h; i++) {
             for (j = 0; j < w; j++) {
                 int n = i*w+j;
-                a[n*bases + k] = data[n];
+                a[n*aw + k] = data[n];
             }
         }
         data += w*h;
@@ -350,7 +350,7 @@ int main()
     prep_data(data, W, H);
     res = gck_calc_2d(data, W, H, KERN_LEN, BASES);
     gck_truncate_data(res, W, H, KERN_LEN, BASES, valid_res);
-    gck_interleave_data(valid_res, VW, VH, BASES, interleaved);
+    gck_interleave_data(valid_res, VW, VH, BASES, interleaved, BASES);
     print_bases(res, W, H, KERN_LEN, BASES);
     print_bases(valid_res, VW, VH, 1, BASES);
     print_bases(interleaved, KERN_LEN, KERN_LEN, 1, BASES);
