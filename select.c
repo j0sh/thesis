@@ -23,7 +23,7 @@ static void swap(int *a, int *b)
  *  This code by Nicolas Devillard - 1998. Public domain.
  */
 
-int *quick_select(int arr[], int n, int dim, int axis)
+int quick_select(int arr[], int n, int dim, int axis)
 {
     int low, high;
     int median;
@@ -32,12 +32,12 @@ int *quick_select(int arr[], int n, int dim, int axis)
     low = 0 ; high = n-1 ; median = (low + high) / 2;
     for (;;) {
         if (high <= low) /* One element only */
-            return arr+median*dim;
+            return median;
 
         if (high == low + 1) {  /* Two elements only */
             if (arr[low*dim + axis] > arr[high*dim + axis])
                 swap(arr+low*dim, arr+high*dim);
-            return arr+median*dim;
+            return median;
         }
 
     /* Find median of low, middle and high items; swap into position low */
