@@ -6,6 +6,11 @@
 static int *swap_buf = NULL, swap_n = 0;   // quite hackish
 static void swap(int *a, int *b)
 {
+    if (!swap_buf) {
+        fprintf(stderr, "select: swapbuf null\n");
+        exit(1);
+    }
+    if (a == b) return; // happens sometimes?
     memcpy(swap_buf, a, swap_n);
     memcpy(a, b, swap_n);
     memcpy(b, swap_buf, swap_n);
