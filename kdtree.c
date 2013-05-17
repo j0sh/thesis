@@ -567,6 +567,29 @@ static kd_node** get_block_positions(kd_tree *t, int *coeffs, CvSize s)
     return nodes;
 }
 
+static kd_node** get_positions(kd_tree *t, int *coeffs, CvSize s,
+    int kern_size)
+{
+    int i, j;
+    int w = s.width - kern_size + 1, h = s.height - kern_size + 1;
+    kd_node **nodes = malloc(s.width*s.height*sizeof(kd_node*));
+    kd_node **n = nodes;
+    for (i = 0; i < h; i++) {
+        for (j = 0; j < w; j++) {
+            kd_node *kdn = kdt_query(t, coeffs);
+            int idx = find_match_idx(coeffs, kdn, t->k);
+            if (-1 == idx) {
+                fprintf(stderr, "Bad offset index (%d,%d)", j, i);
+                print_tuple(coeffs, 1, t->k);
+            }
+            else kdn->xy[idx] = XY_TO_INT(j, i);
+            *n++ = kdn;
+            coeffs += t->k;
+        }
+    }
+    return nodes;
+}
+
 static int test_positions(kd_tree *t, int *coeffs, int nb)
 {
     int i, errors = 0;
