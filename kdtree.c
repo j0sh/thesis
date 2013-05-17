@@ -102,9 +102,29 @@ kdt_in:
         loops++;
         if (loops == t->k) {
             // we have actually gone through every single element here
-            // and each dimension is the same as its neighbor
+            // and each dimension is ALMOST the same as its neighbor
+            // so search for uniques
+            int *p = points, i = 0, r = 0, w = 0;
+            for (r = 0; r < nb_points; r++) {
+                int *q = points;
+                for (i = 0; i < w; i++) {
+                    if (!memcmp(p, q, t->k*sizeof(int))) break;
+                    q += t->k;
+                }
+                if (i == w) {
+                    int *u = points+w*t->k;
+                    if (u != p) memcpy(u, p, t->k*sizeof(int));
+                    w++;
+                }
+                p += t->k;
+            }
+            if (w > LEAF_CANDS) {
+                nb_points = w;
+                goto kdt_in;
+            }
             node->left = node->right = NULL;
-            node->nb = 1; // points are all the same
+            node->nb = w;
+            node->value = points;
             return node;
         }
         goto kdt_in;
