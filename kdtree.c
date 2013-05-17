@@ -18,6 +18,10 @@
 #define XY_TO_X(x) ((x)&((1<<16)-1))
 #define XY_TO_Y(y) ((y)>>16)
 
+#define PACK_SCOREIDX(s, i) ((uint64_t)((uint64_t)s << 32 | (i)))
+#define UNPACK_SCORE(a) ((a) >> 32)
+#define UNPACK_IDX(a) ((a)&(0xFFFFFFFF))
+
 typedef struct kd_node {
     int val;
     int nb;
@@ -794,6 +798,166 @@ static void test_gck2()
     cvReleaseImage(&matched2);
     cvReleaseImage(&src);
     cvReleaseImage(&dst);
+}
+
+static void xy2img(IplImage *xy, IplImage *img, IplImage *recon)
+{
+    int w = xy->width, h = xy->height, i, j;
+    int xystride = xy->widthStep/sizeof(int32_t);
+    int rstride = recon->widthStep;
+    int stride = img->widthStep;
+    int32_t *xydata = (int32_t*)xy->imageData;
+    uint8_t *rdata = (uint8_t*)recon->imageData;
+    uint8_t *data = (uint8_t*)img->imageData;
+
+    for (i = 0; i < h; i++) {
+        for (j = 0; j < w; j++) {
+            int v = xydata[i*xystride + j];
+            int x = XY_TO_X(v), y = XY_TO_Y(v);
+            int rd = i*rstride + j*3, dd = y*stride + x*3;
+            *(rdata + rd + 0) = *(data + dd + 0);
+            *(rdata + rd + 1) = *(data + dd + 1);
+            *(rdata + rd + 2) = *(data + dd + 2);
+        }
+    }
+}
+
+static int64_t match_score(int *coeffs, kd_node *n, int k)
+{
+    int i, j, *u, *v, best = INT_MAX, idx = -1;
+    for (i = 0; i < n->nb; i++) {
+        int dist = 0;
+        u = coeffs;
+        v = n->value+i*k;
+        for (j = 0; j < k; j++) {
+            int a = *u++;
+            int b = *v++;
+            dist += (a - b)*(a - b);
+        }
+        if (dist < best) {
+            best = dist;
+            idx = i;
+        }
+    }
+    return PACK_SCOREIDX(best, idx);
+}
+
+static int64_t check_match(int *coeffs, kd_node *n, int k, int best)
+{
+    int64_t res = match_score(coeffs, n, k);
+    int attempt = UNPACK_SCORE(res);
+    if (attempt < best) return res;
+    return -1;
+}
+
+static uint64_t best_match(kd_tree *t, int *coeffs, int x, int y,
+    kd_node **prev, kd_node **map, int w, int h, int dir)
+{
+#define QSZ 10
+#define CHKNSET(q) if ((res=check_match(coeffs,(q),k,best))!=-1) { \
+    best = UNPACK_SCORE(res); \
+    idx = UNPACK_IDX(res); \
+    n = (q); \
+    xy = n->xy[idx], x1 = XY_TO_X(xy), y1 = XY_TO_Y(xy); \
+    if ((dir>0 && y1 < h-1) || (dir < 0 && y1)) ADDQ(map[(y1+dir)*w+x1]); \
+    if ((dir>0 && x1 < w-1) || (dir < 0 && x1)) ADDQ(map[y1*w+x1+dir]); }
+
+#define ADDQ(q) {if (qsize < QSZ) queue[qsize++] = (q);}
+
+    int k = t->k, best = INT_MAX, idx = -1, qsize = 0, i, xy, x1, y1;
+    int64_t res;
+    kd_node *queue[QSZ];
+    kd_node *n = kdt_query(t, coeffs);
+    CHKNSET(n);
+
+    // for better *perceptual* uniformity: check, but don't include
+    // adjacent pixels. For *numerical* uniformity, include adjacent
+    if (y) {
+        res = check_match(coeffs, prev[0], k, best);
+        if (res != -1) {
+        xy = prev[0]->xy[UNPACK_IDX(res)];
+        x1 = XY_TO_X(xy), y1 = XY_TO_Y(xy);
+        if ((dir>0 && y1 < h-1) || (dir < 0 && y1)) ADDQ(map[(y1+dir)*w+x1]);
+        if ((dir>0 && x1 < w-1) || (dir < 0 && x1)) ADDQ(map[y1*w+x1+dir]);
+        }
+    }
+
+    if (x) {
+        res = check_match(coeffs, prev[dir], k, best);
+        if (res != -1) {
+        xy = prev[dir]->xy[UNPACK_IDX(res)];
+        x1 = XY_TO_X(xy), y1 = XY_TO_Y(xy);
+        if ((dir>0 && y1 < h-1) || (dir < 0 && y1)) ADDQ(map[(y1+dir)*w+x1]);
+        if ((dir>0 && x1 < w-1) || (dir < 0 && x1)) ADDQ(map[y1*w+x1+dir]);
+        }
+    }
+
+    //if (y) ADDQ(prev[0]); if (x) ADDQ(prev[dir]);
+    //if (y) CHKNSET(prev[0]); if (x) CHKNSET(prev[dir]);
+    for (i = 0; i < qsize; i++) CHKNSET(queue[i]);
+    *prev = n;
+    return PACK_SCOREIDX(best, n->xy[idx]);
+
+#undef QSZ
+#undef CHKNSET
+#undef ADDQ
+}
+
+IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
+    kd_node **xy_map, CvSize dst_size)
+{
+    IplImage *xy = cvCreateImage(dst_size, IPL_DEPTH_32S, 1);
+    IplImage *dst = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
+    int w = dst_size.width  - 8 + 1, h = dst_size.height - 8 + 1;
+    int k = t->k, sz = w*h, i, sw = src->width - 8 + 1;
+    int sh = src->height - 8 + 1;
+    kd_node **nodes = malloc(w*sizeof(kd_node*)), **node;
+    int *scores = malloc(sz*sizeof(int)), *s = scores;
+    int *coeffsb = coeffs+(sz-1)*k;
+    int *xydata = (int*)xy->imageData;
+    for (i = 0; i < sz; i++) {
+        int x = i % w, y = i/w, sx, sy, sxy;
+        uint64_t res;
+        if (!x) {
+            node = nodes;
+            xydata = (int*)xy->imageData + y*(xy->widthStep/sizeof(int));
+        }
+        res = best_match(t, coeffs, x, y, node, xy_map, sw, sh, -1);
+        sxy = UNPACK_IDX(res); sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
+        *scores++ = UNPACK_SCORE(res);
+        *xydata++ = sxy;
+        if (sx >= src->width || sy >= src->height) {
+            printf("grievous error: got %d,%d but dims %d,%d sxy %d\n", sx, sy, src->width, src->height, sxy);
+        }
+        coeffs += k;
+        node++;
+    }
+/*
+    // reversing contributes very little; eliminate?
+    for (i = sz; i >= 0; i--) {
+        int x = i % w, y = i/w, sx, sy, sxy, score;
+        int rx = (sz - i) % w, ry = (sz - i)/w;
+        uint64_t res;
+        if (!rx) {
+            node = nodes+w-1;
+            xydata = (int*)xy->imageData + y*(xy->widthStep/sizeof(int));
+        }
+        res = best_match(t, coeffsb, rx, ry, node, xy_map, sw, sh, 1);
+        sxy = UNPACK_IDX(res); sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
+        score = UNPACK_SCORE(res);
+        if (sx >= src->width || sy >= src->height) {
+            printf("grievous error: got %d,%d but dims %d,%d sxy %d\n", sx, sy, src->width, src->height, sxy);
+        }
+        if (s[i] > score) xydata[x] = sxy;
+        coeffsb -= k;
+        node--;
+    }
+*/
+    free(s);
+    free(nodes);
+    xy2img(xy, src, dst);
+    cvReleaseImage(&xy);
+    return dst;
 }
 
 static int match_score3(int *coeffs, kd_node *n, int k)
