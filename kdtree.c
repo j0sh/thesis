@@ -545,7 +545,7 @@ static IplImage* match2(kd_tree *t, int *coeffs, CvSize s)
     return img;
 }
 
-static kd_node** get_positions(kd_tree *t, int *coeffs, CvSize s)
+static kd_node** get_block_positions(kd_tree *t, int *coeffs, CvSize s)
 {
     int i, j;
     CvSize size = {s.width/8, s.height/8};
@@ -690,7 +690,7 @@ static void test_wht()
     kdt_new(&kdt, c_src, sz, dim);
     printf("finished building tree\n");
 
-    kd_node **pos = get_positions(&kdt, c_src, size);
+    kd_node **pos = get_block_positions(&kdt, c_src, size);
     printf("got positions\n");
     free(pos);
 
