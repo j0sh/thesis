@@ -796,6 +796,72 @@ static void test_gck2()
     cvReleaseImage(&dst);
 }
 
+static int match_score3(int *coeffs, kd_node *n, int k)
+{
+    int i, j, *u, *v, best = INT_MAX;
+    for (i = 0; i < n->nb; i++) {
+        int dist = 0;
+        u = coeffs;
+        v = n->value+i*k;
+        for (j = 0; j < k; j++) {
+            int a = *u++;
+            int b = *v++;
+            dist += (a - b)*(a - b);
+        }
+        if (dist < best) best = dist;
+    }
+    return best;
+}
+
+static kd_node* best_match3(kd_tree *t, int *coeffs, int x, int y,
+    kd_node **nodes)
+{
+    int k = t->k;
+    kd_node *n = kdt_query(t, coeffs);
+    int best = match_score3(coeffs, n, k);
+    if (!x || !y) return n;
+    kd_node *top = nodes[0];
+    kd_node *left = nodes[-1];
+    int attempt = match_score3(coeffs, top, k);
+    if (attempt < best) {
+        best = attempt;
+        n = top;
+    }
+    attempt = match_score3(coeffs, left, k);
+    if (attempt < best) { best = attempt; n = left; }
+    return n;
+}
+
+IplImage* match_complete3(kd_tree *t, int *coeffs, IplImage *src,
+    CvSize dst_size)
+{
+    IplImage *dst = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
+    int w = dst_size.width  - 8 + 1, h = dst_size.height - 8 + 1;
+    int k = t->k, sz = w*h, i;
+    uint8_t *dstdata = (uint8_t*)dst->imageData;
+    uint8_t *srcdata = (uint8_t*)src->imageData;
+    int dststride = dst->widthStep, srcstride = src->widthStep;
+    kd_node **nodes = malloc(w*sizeof(kd_node*)), **curnode;
+    for (i = 0; i < sz; i++) {
+        int x = i % w, y = i/w, idx, sx, sy, sxy;
+        if (!x) curnode = nodes;
+        kd_node *n = best_match3(t, coeffs, x, y, curnode);
+        idx = best_match_idx(coeffs, n, k);
+        if (idx < 0) fprintf(stderr, "uhoh negative index\n");
+        sxy = n->xy[idx]; sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
+        if (sx >= src->width || sy >= src->height) {
+            printf("grievous error: got %d,%d but dims %d,%d\n", sx, sy, src->width, src->height);
+        }
+        dstdata[y*dststride+x*3+0] = srcdata[sy*srcstride+sx*3+0];
+        dstdata[y*dststride+x*3+1] = srcdata[sy*srcstride+sx*3+1];
+        dstdata[y*dststride+x*3+2] = srcdata[sy*srcstride+sx*3+2];
+        coeffs += k;
+        *curnode++ = n;
+    }
+    free(nodes);
+    return dst;
+}
+
 IplImage* match_complete2(kd_tree *t, int *coeffs, IplImage *src,
     CvSize dst_size)
 {
