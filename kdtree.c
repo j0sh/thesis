@@ -438,9 +438,10 @@ static IplImage* splat(int *coeffs, CvSize size, int dim)
     return img;
 }
 
-static void find_best_match(int *coeffs, int *newcoeffs, kd_node *n, int k)
+static int find_best_match(int *coeffs, int *newcoeffs, kd_node *n,
+    int k, int best)
 {
-    int i, j, best = INT_MAX, *u, *v;
+    int i, j, *u, *v;
     for (i = 0; i < n->nb; i++) {
         int dist = 0;
         u = coeffs;
@@ -455,6 +456,27 @@ static void find_best_match(int *coeffs, int *newcoeffs, kd_node *n, int k)
             best = dist;
         }
     }
+    return best;
+}
+
+static int best_match_idx(int *coeffs, kd_node *n, int k)
+{
+    int i, j, *u, *v, best = INT_MAX, idx = -1;
+    for (i = 0; i < n->nb; i++) {
+        int dist = 0;
+        u = coeffs;
+        v = n->value+i*k;
+        for (j = 0; j < k; j++) {
+            int a = *u++;
+            int b = *v++;
+            dist += (a - b)*(a - b);
+        }
+        if (dist < best) {
+            best = dist;
+            idx = i;
+        }
+    }
+    return idx;
 }
 
 static int find_match_idx(int *coeffs, kd_node *n, int k)
@@ -467,7 +489,44 @@ static int find_match_idx(int *coeffs, kd_node *n, int k)
     return -1; // no match found
 }
 
+static void refine(int *coeffs, int *newcoeffs, kd_node **nodes,
+    int x, int y, int w, int k, int best)
+{
+    kd_node *top = nodes[y*(w-1)+x];
+    kd_node *left = nodes[y*w+x-1];
+    int newbest = find_best_match(coeffs, newcoeffs, top, k, best);
+    find_best_match(coeffs, newcoeffs, left, k, newbest);
+}
+
 static IplImage* match(kd_tree *t, int *coeffs, CvSize s)
+{
+    int i, j, k = t->k, best;
+    CvSize size = {s.width/8, s.height/8};
+    int *newcoeffs = malloc(sizeof(int)*size.width*size.height*k);
+    kd_node **nodes = malloc(sizeof(kd_node*)*size.width*size.height);
+    int *c = newcoeffs;
+    for (i = 0; i < size.height; i++) {
+        for (j = 0; j < size.width; j++) {
+            kd_node *n = kdt_query(t, coeffs);
+            best = find_best_match(coeffs, newcoeffs, n, k, INT_MAX);
+            // check because there's nothing on the top and left
+            if (i > 0 && j > 0) {
+                refine(coeffs, newcoeffs, nodes, j, i, size.width, k,
+                    best);
+            }
+            nodes[i*size.width+j] = n;
+            coeffs += k;
+            newcoeffs += k;
+        }
+    }
+    IplImage *img = splat(c, s, k);
+    free(nodes);
+    free(c);
+    return img;
+}
+
+// old stuff without refinement; remove soonish
+static IplImage* match2(kd_tree *t, int *coeffs, CvSize s)
 {
     int i, j, k = t->k;
     CvSize size = {s.width/8, s.height/8};
@@ -476,7 +535,7 @@ static IplImage* match(kd_tree *t, int *coeffs, CvSize s)
     for (i = 0; i < size.height; i++) {
         for (j = 0; j < size.width; j++) {
             kd_node *n = kdt_query(t, coeffs);
-            find_best_match(coeffs, newcoeffs, n, k);
+            find_best_match(coeffs, newcoeffs, n, k, INT_MAX);
             coeffs += k;
             newcoeffs += k;
         }
@@ -679,10 +738,46 @@ static void test_gck()
     cvReleaseImage(&src);
 }
 
+static void test_gck2()
+{
+    IplImage *src = alignedImageFrom("lena.png", 8);
+    IplImage *dst = alignedImageFrom("eva.jpg", 8);
+    //IplImage *dst = alignedImageFrom("frames/bbb22.png", 8);
+    //IplImage *src = alignedImageFrom("frames/bbb19.png", 8);
+    CvSize size = cvGetSize(src);
+    int w1 = size.width - 8 + 1, h1 = size.height - 8 + 1;
+    int dim = 27, sz = w1*h1, *c_dst;
+    int *p, *i;
+    kd_tree kdt;
+
+    set_swap_buf(dim);
+    img_coeffs(src, dim, &p, &i);
+    c_dst = block_coeffs(dst, dim);
+    memset(&kdt, 0, sizeof(kdt));
+
+    kdt_new(&kdt, i, sz, dim);
+    IplImage *matched = match(&kdt, c_dst, cvGetSize(dst));
+    IplImage *matched2 = match2(&kdt, c_dst, cvGetSize(dst));
+    cvShowImage("src", src);
+    cvShowImage("matched", matched);
+    cvShowImage("matched2", matched2);
+    cvWaitKey(0);
+
+    kdt_free(&kdt);
+    free(p);
+    free(i);
+    free(c_dst);
+    cvReleaseImage(&matched);
+    cvReleaseImage(&matched2);
+    cvReleaseImage(&src);
+    cvReleaseImage(&dst);
+}
+
 int main()
 {
     //test_wht();
-    test_gck();
+    //test_gck();
     //test_coeffs();
+    test_gck2();
     return 0;
 }
