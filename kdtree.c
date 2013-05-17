@@ -1056,11 +1056,83 @@ IplImage* match_complete2(kd_tree *t, int *coeffs, IplImage *src,
     return dst;
 }
 
+static int64_t sumimg(IplImage *img, int kern)
+{
+    int64_t sum = 0;
+    int i, j;
+    uint8_t *data;
+    for (i = 0; i < img->height; i++) {
+        data =  (uint8_t*)img->imageData + i*img->widthStep;
+        for (j = 0; j < img->width - kern + 1; j++) {
+            sum += *data++;
+            sum += *data++;
+            sum += *data++;
+        }
+    }
+    return sum;
+}
+
+static void test_complete()
+{
+    //IplImage *src = alignedImageFrom("frames/bbb22.png", 8);
+    //IplImage *dst = alignedImageFrom("frames/bbb19.png", 8);
+    IplImage *src = alignedImageFrom("lena.png", 8);
+    IplImage *dst = alignedImageFrom("eva.jpg", 8);
+    CvSize src_size = cvGetSize(src), dst_size = cvGetSize(dst);
+    IplImage *diff = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
+    IplImage *diff3 = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
+    IplImage *diff2 = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
+    int w1 = src_size.width - 8 + 1, h1 = src_size.height - 8 + 1;
+    int dim = 27, sz = w1*h1;
+    int *p, *i, *dp, *di;
+    kd_tree kdt;
+
+    set_swap_buf(dim);
+    img_coeffs(src, dim, &p, &i);
+    img_coeffs(dst, dim, &dp, &di);
+    memset(&kdt, 0, sizeof(kdt));
+
+    kdt_new(&kdt, i, sz, dim);
+    kd_node** map = get_positions(&kdt, i, src_size, 8);
+    IplImage *matched = match_complete(&kdt, di, src, map, dst_size);
+    IplImage *matched3 = match_complete3(&kdt, di, src, dst_size);
+    IplImage *matched2 = match_complete2(&kdt, di, src, dst_size);
+    cvShowImage("original", dst);
+    cvShowImage("complete match3", matched3);
+    cvShowImage("complete match2", matched2);
+    cvShowImage("complete match", matched);
+    cvAbsDiff(dst, matched, diff);
+    cvAbsDiff(dst, matched3, diff3);
+    cvAbsDiff(dst, matched2, diff2);
+    //cvShowImage("diff2", diff2);
+    //cvShowImage("diff", diff);
+    //cvShowImage("diff3", diff3);
+    cvWaitKey(0);
+
+    printf("diffsum : %lld\n", sumimg(diff, 8));
+    printf("diff2sum: %lld\n", sumimg(diff2, 8));
+    printf("diff3sum: %lld\n", sumimg(diff3, 8));
+
+    kdt_free(&kdt);
+    free(p);
+    free(i);
+    free(map);
+    cvReleaseImage(&src);
+    cvReleaseImage(&dst);
+    cvReleaseImage(&matched);
+    cvReleaseImage(&matched2);
+    cvReleaseImage(&matched3);
+    cvReleaseImage(&diff);
+    cvReleaseImage(&diff2);
+    cvReleaseImage(&diff3);
+}
+
 int main()
 {
     //test_wht();
     //test_gck();
     //test_coeffs();
-    test_gck2();
+    //test_gck2();
+    test_complete();
     return 0;
 }
