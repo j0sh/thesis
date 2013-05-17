@@ -796,6 +796,36 @@ static void test_gck2()
     cvReleaseImage(&dst);
 }
 
+IplImage* match_complete2(kd_tree *t, int *coeffs, IplImage *src,
+    CvSize dst_size)
+{
+    IplImage *dst = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
+    int w = dst_size.width  - 8 + 1, h = dst_size.height - 8 + 1;
+    int k = t->k, sz = w*h, i;
+    uint8_t *dstdata = (uint8_t*)dst->imageData;
+    uint8_t *srcdata = (uint8_t*)src->imageData;
+    int dststride = dst->widthStep, srcstride = src->widthStep;
+    kd_node **nodes = malloc(w*sizeof(kd_node*)), **curnode;
+    for (i = 0; i < sz; i++) {
+        int x = i % w, y = i/w, idx, sx, sy, sxy;
+        if (!x) curnode = nodes;
+        kd_node *n = kdt_query(t, coeffs);
+        idx = best_match_idx(coeffs, n, k);
+        if (idx < 0) fprintf(stderr, "uhoh negative index\n");
+        sxy = n->xy[idx]; sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
+        if (sx >= src->width || sy >= src->height) {
+            printf("grievous error: got %d,%d but dims %d,%d\n", sx, sy, src->width, src->height);
+        }
+        dstdata[y*dststride+x*3+0] = srcdata[sy*srcstride+sx*3+0];
+        dstdata[y*dststride+x*3+1] = srcdata[sy*srcstride+sx*3+1];
+        dstdata[y*dststride+x*3+2] = srcdata[sy*srcstride+sx*3+2];
+        coeffs += k;
+        *curnode++ = n;
+    }
+    free(nodes);
+    return dst;
+}
+
 int main()
 {
     //test_wht();
