@@ -251,39 +251,6 @@ int* gck_calc_2d(uint8_t *data, int w, int h, int kern_size, int bases)
     return res;
 }
 
-void gck_truncate_data(int *data, int w, int h,
-    int kern_size, int bases, int *dst)
-{
-    // returns data from non-padded areas
-    int kw = w + kern_size - 1, i, j, kh = h + kern_size - 1;
-    int rw = w - kern_size + 1, rh = h - kern_size + 1;
-    int *src = data;
-    for  (j = 0; j < bases; j++) {
-        src = data + kw*kh*j;
-        src += kw * (kern_size - 1) + kern_size - 1;
-        for (i = 0; i < rh; i++) {
-            memcpy(dst, src, rw*sizeof(int));
-            dst += rw;
-            src += kw;
-        }
-    }
-}
-
-void gck_interleave_data(int *data, int w, int h, int bases, int *a, int aw)
-{
-    // takes AAAABBBBCCCC -> ABCABCABCABC
-    int i, j, k;
-    for (k = 0; k < bases; k++) {
-        for (i = 0; i < h; i++) {
-            for (j = 0; j < w; j++) {
-                int n = i*w+j;
-                a[n*aw + k] = data[n];
-            }
-        }
-        data += w*h;
-    }
-}
-
 int* gck_alloc_buffer(int w, int h, int kern_size, int bases)
 {
     int kw = w - kern_size + 1, kh = h - kern_size + 1;
