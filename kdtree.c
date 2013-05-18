@@ -1085,16 +1085,24 @@ static void test_complete()
     int w1 = src_size.width - 8 + 1, h1 = src_size.height - 8 + 1;
     int dim = 27, sz = w1*h1;
     int *p, *i, *dp, *di;
+    double t1, t2, t3, t4, t5, t6;
     kd_tree kdt;
 
-    set_swap_buf(dim);
-    img_coeffs(src, dim, &p, &i);
-    img_coeffs(dst, dim, &dp, &di);
     memset(&kdt, 0, sizeof(kdt));
+    set_swap_buf(dim);
+    t1 = get_time();
+    img_coeffs(src, dim, &p, &i);
+    t2 = get_time();
+    img_coeffs(dst, dim, &dp, &di);
 
+    t3 = get_time();
     kdt_new(&kdt, i, sz, dim);
+    t4 = get_time();
     kd_node** map = get_positions(&kdt, i, src_size, 8);
+    t5 = get_time();
+
     IplImage *matched = match_complete(&kdt, di, src, map, dst_size);
+    t6 = get_time();
     IplImage *matched3 = match_complete3(&kdt, di, src, dst_size);
     IplImage *matched2 = match_complete2(&kdt, di, src, dst_size);
     cvShowImage("original", dst);
@@ -1112,6 +1120,10 @@ static void test_complete()
     printf("diffsum : %lld\n", sumimg(diff, 8));
     printf("diff2sum: %lld\n", sumimg(diff2, 8));
     printf("diff3sum: %lld\n", sumimg(diff3, 8));
+    printf("total time: %fms\ncoeffs %f\nbuilding %f\nmapping %f\n"
+        "matching: %f\ninit: %f\n",
+        (t6 - t1)*1000, (t2 - t1)*1000, (t4 - t3)*1000,
+        (t5 - t4)*1000, (t6 - t5)*1000, (t5 - t1)*1000);
 
     kdt_free(&kdt);
     free(p);
