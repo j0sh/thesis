@@ -609,22 +609,42 @@ static int test_positions(kd_tree *t, int *coeffs, int nb)
     return errors;
 }
 
-static void coeffs(IplImage *img, int bases, int total_b,
-    int *planar, int *interleaved)
+static void interleave_data(int *data, int w, int h, int kern_size,
+    int bases, int *a, int aw)
+{
+    // takes XXXAAAABBBBCCCCXXX -> ABCABCABCABC
+    // eg, remove the results that incorporate padding and interleave
+    int kw = w + kern_size - 1, i, j, k, kh = h + kern_size - 1;
+    int rw = w - kern_size + 1, rh = h - kern_size + 1;
+    int *src = data;
+    for (k = 0; k < bases; k++) {
+        src = data + kw*kh*k;
+        src += kw * (kern_size - 1) + kern_size - 1;
+        for (i = 0; i < rh; i++) {
+            int *s = src;
+            for (j = 0; j < rw; j++) {
+                int n = i*rw+j;
+                a[n*aw + k] = *s++;
+            }
+            src += kw;
+        }
+    }
+}
+
+static void coeffs(IplImage *img, int bases, int total_b, int *data)
 {
     CvSize s = cvGetSize(img);
-    int w = s.width, h = s.height, rw = w - 8 + 1, rh = h - 8 + 1;
+    int w = s.width, h = s.height;
     if (w != img->widthStep) {
         fprintf(stderr, "image not aligned uh oh\n");
         exit(1);
     }
     int *res = gck_calc_2d((uint8_t*)img->imageData, w, h, 8, bases);
-    gck_truncate_data(res, w, h, 8, bases, planar);
-    gck_interleave_data(planar, rw, rh, bases, interleaved, total_b);
+    interleave_data(res, w, h, 8, bases, data, total_b);
     free(res);
 }
 
-static void img_coeffs(IplImage *img, int dim, int **pl, int **in) {
+static void img_coeffs(IplImage *img, int dim, int **in) {
     if (dim != 27) return; // temporary; nothing else supported
 
     CvSize size = cvGetSize(img);
@@ -633,25 +653,22 @@ static void img_coeffs(IplImage *img, int dim, int **pl, int **in) {
     IplImage *a = cvCreateImage(size, IPL_DEPTH_8U, 1);
     IplImage *b = cvCreateImage(size, IPL_DEPTH_8U, 1);
     int w = size.width, h = size.height;
-    int rw = w - 8 + 1, rh = h - 8 + 1;
-    int *planar = gck_alloc_buffer(w, h, 8, dim);
     int *interleaved = gck_alloc_buffer(w, h, 8, dim);
 
     cvCvtColor(img, lab, CV_BGR2Lab);
     cvSplit(lab, l, a, b, NULL);
 
-    coeffs(l, 25, 27, planar, interleaved);
+    coeffs(l, 25, 27, interleaved);
 
-    coeffs(a, 1, 27, planar+(rw*rh*25), interleaved+25);
+    coeffs(a, 1, 27, interleaved+25);
 
-    coeffs(b, 1, 27, planar+(rw*rh*26), interleaved+26);
+    coeffs(b, 1, 27, interleaved+26);
 
     cvReleaseImage(&lab);
     cvReleaseImage(&l);
     cvReleaseImage(&a);
     cvReleaseImage(&b);
 
-    *pl = planar;
     *in = interleaved;
 }
 
@@ -741,9 +758,9 @@ static void test_gck()
     CvSize size = cvGetSize(src);
     int w1 = size.width - 8 + 1, h1 = size.height - 8 + 1;
     int dim = 27, sz = w1*h1;
-    int *p, *i, *c_src;
+    int *i, *c_src;
     set_swap_buf(dim);
-    img_coeffs(src, dim, &p, &i);
+    img_coeffs(src, dim, &i);
     c_src = block_coeffs(src, dim);
     kd_tree kdt;
     memset(&kdt, 0, sizeof(kdt));
@@ -758,7 +775,6 @@ static void test_gck()
     cvShowImage("matched", matched);
     cvWaitKey(0);
     kdt_free(&kdt);
-    free(p);
     free(i);
     free(c_src);
     cvReleaseImage(&matched);
@@ -774,11 +790,11 @@ static void test_gck2()
     CvSize size = cvGetSize(src);
     int w1 = size.width - 8 + 1, h1 = size.height - 8 + 1;
     int dim = 27, sz = w1*h1, *c_dst;
-    int *p, *i;
+    int *i;
     kd_tree kdt;
 
     set_swap_buf(dim);
-    img_coeffs(src, dim, &p, &i);
+    img_coeffs(src, dim, &i);
     c_dst = block_coeffs(dst, dim);
     memset(&kdt, 0, sizeof(kdt));
 
@@ -791,7 +807,6 @@ static void test_gck2()
     cvWaitKey(0);
 
     kdt_free(&kdt);
-    free(p);
     free(i);
     free(c_dst);
     cvReleaseImage(&matched);
@@ -1084,16 +1099,16 @@ static void test_complete()
     IplImage *diff2 = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     int w1 = src_size.width - 8 + 1, h1 = src_size.height - 8 + 1;
     int dim = 27, sz = w1*h1;
-    int *p, *i, *dp, *di;
+    int *i, *di;
     double t1, t2, t3, t4, t5, t6;
     kd_tree kdt;
 
     memset(&kdt, 0, sizeof(kdt));
     set_swap_buf(dim);
     t1 = get_time();
-    img_coeffs(src, dim, &p, &i);
+    img_coeffs(src, dim, &i);
     t2 = get_time();
-    img_coeffs(dst, dim, &dp, &di);
+    img_coeffs(dst, dim, &di);
 
     t3 = get_time();
     kdt_new(&kdt, i, sz, dim);
@@ -1126,8 +1141,8 @@ static void test_complete()
         (t5 - t4)*1000, (t6 - t5)*1000, (t5 - t1)*1000);
 
     kdt_free(&kdt);
-    free(p);
     free(i);
+    free(di);
     free(map);
     cvReleaseImage(&src);
     cvReleaseImage(&dst);
