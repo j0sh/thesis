@@ -38,27 +38,6 @@ typedef struct kd_tree {
     kd_node *root;
 } kd_tree;
 
-static int calc_dist(int *coeffs, kd_node *n, int k)
-{
-    int i, j, d = 0;
-    int *v = n->value, *u;
-    for (i = 0; i < n->nb; i++) {
-        u = coeffs;
-        for (j = 0; j < k; j++) {
-            int a = *v++;
-            int b = *u++;
-            d += (a - b)*(a - b);
-        }
-    }
-    return d/(n->nb*k);
-}
-
-inline static int kdt_compar(const void *a, const void *b, void *opaque)
-{
-    int off = *(int*)opaque;
-    return ((int*)a)[off] - ((int*)b)[off];
-}
-
 static void print_tuple(int *a, int nb, int tsz)
 {
     int i, j;
@@ -303,28 +282,6 @@ static IplImage *alignedImageFrom(char *file, int align)
     }
     cvReleaseImage(&pre);
     return img;
-}
-
-static void query_img(kd_tree *t, int *coeffs, CvSize s)
-{
-    int i, j, k = t->k;
-    CvSize size = {s.width/8, s.height/8};
-    IplImage *img = cvCreateImage(size, IPL_DEPTH_16U, 1);
-    uint16_t *data = (uint16_t*)img->imageData, *line;
-    cvNamedWindow("queried", 0);
-    cvResizeWindow("queried", s.width, s.height);
-    for (i = 0; i < img->height; i++) {
-        line = data;
-        for (j = 0; j < img->width; j++) {
-            kd_node *n = kdt_query(t, coeffs);
-            int dist = calc_dist(coeffs, n, k);
-            *line++ = dist;
-            coeffs += k;
-        }
-        data += img->widthStep/sizeof(uint16_t);
-    }
-    cvShowImage("queried", img);
-    cvReleaseImage(&img);
 }
 
 static void dequantize(IplImage *img, int n, unsigned *order,
