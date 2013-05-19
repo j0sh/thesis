@@ -35,6 +35,7 @@ typedef struct kd_tree {
     int k;
     int *order;
     int **points;
+    int *start;
     kd_node *root;
 } kd_tree;
 
@@ -203,6 +204,7 @@ void kdt_new(kd_tree *t, int *points, int nb_points, int k)
     int i;
     t->points = malloc(nb_points*sizeof(int*));
     for (i = 0; i < nb_points; i++) t->points[i] = points+i*k;
+    t->start = points;
     t->k = k; // dimensionality
     t->order = calc_dimstats(points, nb_points, k);
     t->root = kdt_new_in(t, t->points, nb_points, 0);
@@ -827,52 +829,77 @@ static uint64_t best_match(kd_tree *t, int *coeffs, int x, int y,
     kd_node **prev, kd_node **map, int w, int h, int dir)
 {
 #define QSZ 10
-#define CHKNSET(q) if ((res=check_match(coeffs,(q),k,best))!=-1) { \
-    best = UNPACK_SCORE(res); \
-    idx = UNPACK_IDX(res); \
-    n = (q); \
-    xy = n->xy[idx], x1 = XY_TO_X(xy), y1 = XY_TO_Y(xy); \
-    if ((dir>0 && y1 < h-1) || (dir < 0 && y1)) ADDQ(map[(y1+dir)*w+x1]); \
-    if ((dir>0 && x1 < w-1) || (dir < 0 && x1)) ADDQ(map[y1*w+x1+dir]); }
 
 #define ADDQ(q) {if (qsize < QSZ) queue[qsize++] = (q);}
 
     int k = t->k, best = INT_MAX, idx = -1, qsize = 0, i, xy, x1, y1;
+    unsigned bestxy = 0;
     int64_t res;
     kd_node *queue[QSZ];
     kd_node *n = kdt_query(t, coeffs);
-    CHKNSET(n);
+
+    res = check_match(coeffs, n, k, best);
+    if (res != -1) {
+        best = UNPACK_SCORE(res);
+        idx = UNPACK_IDX(res);
+        int *points = n->value[idx];
+        xy = (points - t->start)/t->k;
+        x1 = xy % w, y1 = xy/w;
+        bestxy = XY_TO_INT(x1, y1);
+        if ((dir>0 && y1 < h-1) || (dir < 0 && y1))
+            ADDQ(map[(y1+dir)*w+x1]);
+        if ((dir>0 && x1 < w-1) || (dir < 0 && x1))
+            ADDQ(map[y1*w+x1+dir]);
+    }
 
     // for better *perceptual* uniformity: check, but don't include
     // adjacent pixels. For *numerical* uniformity, include adjacent
     if (y) {
         res = check_match(coeffs, prev[0], k, best);
         if (res != -1) {
-        xy = prev[0]->xy[UNPACK_IDX(res)];
-        x1 = XY_TO_X(xy), y1 = XY_TO_Y(xy);
-        if ((dir>0 && y1 < h-1) || (dir < 0 && y1)) ADDQ(map[(y1+dir)*w+x1]);
-        if ((dir>0 && x1 < w-1) || (dir < 0 && x1)) ADDQ(map[y1*w+x1+dir]);
+        int *points = prev[0]->value[UNPACK_IDX(res)];
+        xy = (points - t->start)/t->k;
+        x1 = xy % w, y1 = xy/w;
+        if ((dir>0 && y1 < h-1) || (dir < 0 && y1))
+            ADDQ(map[(y1+dir)*w+x1]);
+        if ((dir>0 && x1 < w-1) || (dir < 0 && x1))
+            ADDQ(map[y1*w+x1+dir]);
         }
     }
 
     if (x) {
         res = check_match(coeffs, prev[dir], k, best);
         if (res != -1) {
-        xy = prev[dir]->xy[UNPACK_IDX(res)];
-        x1 = XY_TO_X(xy), y1 = XY_TO_Y(xy);
-        if ((dir>0 && y1 < h-1) || (dir < 0 && y1)) ADDQ(map[(y1+dir)*w+x1]);
-        if ((dir>0 && x1 < w-1) || (dir < 0 && x1)) ADDQ(map[y1*w+x1+dir]);
+            int *points = prev[dir]->value[UNPACK_IDX(res)];
+            xy = (points - t->start)/t->k;
+            x1 = xy % w, y1 = xy/w;
+            if ((dir>0 && y1 < h-1) || (dir < 0 && y1))
+                ADDQ(map[(y1+dir)*w+x1]);
+            if ((dir>0 && x1 < w-1) || (dir < 0 && x1))
+                ADDQ(map[y1*w+x1+dir]);
         }
     }
 
-    //if (y) ADDQ(prev[0]); if (x) ADDQ(prev[dir]);
-    //if (y) CHKNSET(prev[0]); if (x) CHKNSET(prev[dir]);
-    for (i = 0; i < qsize; i++) CHKNSET(queue[i]);
+    for (i = 0; i < qsize; i++) {
+        res = check_match(coeffs, queue[i], k, best);
+        if (res != -1) {
+            best = UNPACK_SCORE(res);
+            idx = UNPACK_IDX(res);
+            n = queue[i];
+            int *points = n->value[idx];
+            xy = (points - t->start)/t->k;
+            x1 = xy % w, y1 = xy/w;
+            bestxy = XY_TO_INT(x1, y1);
+            if ((dir>0 && y1 < h-1) || (dir < 0 && y1))
+                ADDQ(map[(y1+dir)*w+x1]);
+            if ((dir>0 && x1 < w-1) || (dir < 0 && x1))
+                ADDQ(map[y1*w+x1+dir]);
+        }
+    }
     *prev = n;
-    return PACK_SCOREIDX(best, n->xy[idx]);
+    return PACK_SCOREIDX(best, bestxy);
 
 #undef QSZ
-#undef CHKNSET
 #undef ADDQ
 }
 
@@ -886,7 +913,6 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
     int sh = src->height - 8 + 1;
     kd_node **nodes = malloc(w*sizeof(kd_node*)), **node;
     int *scores = malloc(sz*sizeof(int)), *s = scores;
-    int *coeffsb = coeffs+(sz-1)*k;
     int *xydata = (int*)xy->imageData;
     for (i = 0; i < sz; i++) {
         int x = i % w, y = i/w, sx, sy, sxy;
@@ -907,6 +933,7 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
     }
 /*
     // reversing contributes very little; eliminate?
+    int *coeffsb = coeffs+(sz-1)*k; // pointer to end of coeffs
     for (i = sz; i >= 0; i--) {
         int x = i % w, y = i/w, sx, sy, sxy, score;
         int rx = (sz - i) % w, ry = (sz - i)/w;
@@ -974,6 +1001,7 @@ IplImage* match_complete3(kd_tree *t, int *coeffs, IplImage *src,
 {
     IplImage *dst = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     int w = dst_size.width  - 8 + 1, h = dst_size.height - 8 + 1;
+    int sw = src->width - 8 + 1;
     int k = t->k, sz = w*h, i;
     uint8_t *dstdata = (uint8_t*)dst->imageData;
     uint8_t *srcdata = (uint8_t*)src->imageData;
@@ -985,7 +1013,9 @@ IplImage* match_complete3(kd_tree *t, int *coeffs, IplImage *src,
         kd_node *n = best_match3(t, coeffs, x, y, curnode);
         idx = best_match_idx(coeffs, n, k);
         if (idx < 0) fprintf(stderr, "uhoh negative index\n");
-        sxy = n->xy[idx]; sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
+        int *points = n->value[idx];
+        sxy = (points - t->start)/t->k;
+        sx = sxy % sw, sy = sxy/sw;
         if (sx >= src->width || sy >= src->height) {
             printf("grievous error: got %d,%d but dims %d,%d\n", sx, sy, src->width, src->height);
         }
@@ -1004,6 +1034,7 @@ IplImage* match_complete2(kd_tree *t, int *coeffs, IplImage *src,
 {
     IplImage *dst = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     int w = dst_size.width  - 8 + 1, h = dst_size.height - 8 + 1;
+    int sw = src->width - 8 + 1;
     int k = t->k, sz = w*h, i;
     uint8_t *dstdata = (uint8_t*)dst->imageData;
     uint8_t *srcdata = (uint8_t*)src->imageData;
@@ -1015,7 +1046,9 @@ IplImage* match_complete2(kd_tree *t, int *coeffs, IplImage *src,
         kd_node *n = kdt_query(t, coeffs);
         idx = best_match_idx(coeffs, n, k);
         if (idx < 0) fprintf(stderr, "uhoh negative index\n");
-        sxy = n->xy[idx]; sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
+        int *points = n->value[idx];
+        sxy = (points - t->start)/t->k;
+        sx = sxy % sw, sy = sxy/sw;
         if (sx >= src->width || sy >= src->height) {
             printf("grievous error: got %d,%d but dims %d,%d\n", sx, sy, src->width, src->height);
         }
