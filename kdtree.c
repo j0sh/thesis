@@ -28,13 +28,13 @@ typedef struct kd_node {
     int axis;
     struct kd_node *left;
     struct kd_node *right;
-    int *value;
+    int **value;
     int xy[LEAF_CANDS];
 } kd_node;
 typedef struct kd_tree {
     int k;
     int *order;
-    int *points;
+    int **points;
     kd_node *root;
 } kd_tree;
 
@@ -50,7 +50,7 @@ static void print_tuple(int *a, int nb, int tsz)
     }
 }
 
-static kd_node *kdt_new_in(kd_tree *t, int *points,
+static kd_node *kdt_new_in(kd_tree *t, int **points,
     int nb_points, int depth)
 {
     if (0 >= nb_points) return NULL;
@@ -65,18 +65,18 @@ static kd_node *kdt_new_in(kd_tree *t, int *points,
     }
 kdt_in:
 
-    median = quick_select(points, nb_points, t->k, axis);
-    node->value = points+median*t->k;
-    node->val = node->value[axis];
+    median = quick_select2(points, nb_points, axis);
+    node->value = points+median;
+    node->val = node->value[0][axis];
     node->axis = axis;
 
-    pivot_nd(points, nb_points, t->k, axis, node->val);
+    pivot2(points, nb_points, axis, node->val);
 
     while ((nb_points - (median+1)) &&
-           (points+(median+1)*t->k)[axis] <= node->val) {
+           points[median+1][axis] <= node->val) {
         // make nodes with the same value as the median at the axis
         // fall on the left side of the tree by bumping up the median
-        node->value += t->k;
+        node->value += 1;
         median += 1;
     }
     if (!(nb_points - (median+1))) {
@@ -87,19 +87,19 @@ kdt_in:
             // we have actually gone through every single element here
             // and each dimension is ALMOST the same as its neighbor
             // so search for uniques
-            int *p = points, i = 0, r = 0, w = 0;
+            int **p = points, i = 0, r = 0, w = 0;
             for (r = 0; r < nb_points; r++) {
-                int *q = points;
+                int **q = points;
                 for (i = 0; i < w; i++) {
-                    if (!memcmp(p, q, t->k*sizeof(int))) break;
-                    q += t->k;
+                    if (!memcmp(*p, *q, t->k*sizeof(int))) break;
+                    q += 1;
                 }
                 if (i == w) {
-                    int *u = points+w*t->k;
-                    if (u != p) memcpy(u, p, t->k*sizeof(int));
+                    int **u = points+w;
+                    if (*u != *p) memcpy(*u, *p, t->k*sizeof(int));
                     w++;
                 }
-                p += t->k;
+                p += 1;
             }
             if (w > LEAF_CANDS) {
                 nb_points = w;
@@ -114,7 +114,7 @@ kdt_in:
     }
 
     node->left = kdt_new_in(t, points, median, depth + 1);
-    node->right = kdt_new_in(t, points+(median+1)*t->k, nb_points - median - 1, depth+1);
+    node->right = kdt_new_in(t, points+median+1, nb_points - median - 1, depth+1);
     node->nb = 1;
 
     return node;
@@ -124,7 +124,7 @@ static kd_node* kdt_query_in(kd_node *n, int depth, int* qd, int dim)
 {
     int k = n->axis;
     if (n->left == NULL && n->right == NULL) return n;
-    if (!memcmp(qd, n->value, dim*sizeof(int))) return n;
+    if (!memcmp(qd, n->value[0], dim*sizeof(int))) return n;
     if (n->left && qd[k] <= n->val) {
         return kdt_query_in(n->left, depth+1, qd, dim);
     } else if (n->right && qd[k] > n->val) {
@@ -200,10 +200,11 @@ static int* calc_dimstats(int *points, int nb, int dim)
 
 void kdt_new(kd_tree *t, int *points, int nb_points, int k)
 {
-    t->points = malloc(nb_points*k*sizeof(int));
-    memcpy(t->points, points, nb_points*k*sizeof(int));
+    int i;
+    t->points = malloc(nb_points*sizeof(int*));
+    for (i = 0; i < nb_points; i++) t->points[i] = points+i*k;
     t->k = k; // dimensionality
-    t->order = calc_dimstats(t->points, nb_points, k);
+    t->order = calc_dimstats(points, nb_points, k);
     t->root = kdt_new_in(t, t->points, nb_points, 0);
 }
 
@@ -222,7 +223,7 @@ void print_kdtree(kd_node *node, int k, int depth, int *order)
     for (i = 0; i < depth; i++) {
         printf(" ");
     }
-    int *val = node->value;
+    int *val = node->value[0];
     for (i = 0; i < k; i++) {
         printf("%d ", val[i]);
     }
@@ -402,18 +403,18 @@ static IplImage* splat(int *coeffs, CvSize size, int dim)
 static int find_best_match(int *coeffs, int *newcoeffs, kd_node *n,
     int k, int best)
 {
-    int i, j, *u, *v;
+    int i, j, *u, *v, **p = n->value;
     for (i = 0; i < n->nb; i++) {
         int dist = 0;
         u = coeffs;
-        v = n->value+i*k;
+        v = *p++;
         for (j = 0; j < k; j++) {
             int a = *u++;
             int b = *v++;
             dist += (a - b)*(a - b);
         }
         if (dist < best) {
-            memcpy(newcoeffs, n->value+i*k, k*sizeof(int));
+            memcpy(newcoeffs, n->value[i], k*sizeof(int));
             best = dist;
         }
     }
@@ -422,11 +423,11 @@ static int find_best_match(int *coeffs, int *newcoeffs, kd_node *n,
 
 static int best_match_idx(int *coeffs, kd_node *n, int k)
 {
-    int i, j, *u, *v, best = INT_MAX, idx = -1;
+    int i, j, *u, *v, **p = n->value, best = INT_MAX, idx = -1;
     for (i = 0; i < n->nb; i++) {
         int dist = 0;
         u = coeffs;
-        v = n->value+i*k;
+        v = *p++;
         for (j = 0; j < k; j++) {
             int a = *u++;
             int b = *v++;
@@ -442,10 +443,10 @@ static int best_match_idx(int *coeffs, kd_node *n, int k)
 
 static int find_match_idx(int *coeffs, kd_node *n, int k)
 {
-    int i, *v = n->value;
+    int i, *v , **p = n->value;
     for (i = 0; i < n->nb; i++) {
+        v = *p++;
         if (!memcmp(coeffs, v, k*sizeof(int))) return i;
-        v += k;
     }
     return -1; // no match found
 }
@@ -796,11 +797,11 @@ static void xy2img(IplImage *xy, IplImage *img, IplImage *recon)
 
 static int64_t match_score(int *coeffs, kd_node *n, int k)
 {
-    int i, j, *u, *v, best = INT_MAX, idx = -1;
+    int i, j, *u, *v, **p = n->value, best = INT_MAX, idx = -1;
     for (i = 0; i < n->nb; i++) {
         int dist = 0;
         u = coeffs;
-        v = n->value+i*k;
+        v = *p++;
         for (j = 0; j < k; j++) {
             int a = *u++;
             int b = *v++;
@@ -934,11 +935,11 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
 
 static int match_score3(int *coeffs, kd_node *n, int k)
 {
-    int i, j, *u, *v, best = INT_MAX;
+    int i, j, *u, *v, **p = n->value, best = INT_MAX;
     for (i = 0; i < n->nb; i++) {
         int dist = 0;
         u = coeffs;
-        v = n->value+i*k;
+        v = *p++;
         for (j = 0; j < k; j++) {
             int a = *u++;
             int b = *v++;
