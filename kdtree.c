@@ -29,7 +29,6 @@ typedef struct kd_node {
     struct kd_node *left;
     struct kd_node *right;
     int **value;
-    int xy[LEAF_CANDS];
 } kd_node;
 typedef struct kd_tree {
     int k;
@@ -37,6 +36,7 @@ typedef struct kd_tree {
     int **points;
     int *start;
     kd_node *root;
+    kd_node **map;
 } kd_tree;
 
 static void print_tuple(int *a, int nb, int tsz)
@@ -55,10 +55,15 @@ static kd_node *kdt_new_in(kd_tree *t, int **points,
     int nb_points, int depth)
 {
     if (0 >= nb_points) return NULL;
-    int axis = t->order[depth % t->k], median, loops = 1;
+    int axis = t->order[depth % t->k], median, loops = 1, pos;
     kd_node *node = malloc(sizeof(kd_node));
 
     if (nb_points <= LEAF_CANDS) {
+        int i, **p = points;
+        for (i = 0; i < nb_points; i++) {
+            pos = (*p++ - t->start)/t->k;
+            t->map[pos] = node;
+        }
         node->value = points;
         node->left = node->right = NULL;
         node->nb = nb_points;
@@ -100,6 +105,8 @@ kdt_in:
                     if (*u != *p) memcpy(*u, *p, t->k*sizeof(int));
                     w++;
                 }
+                pos = (*p - t->start)/t->k;
+                t->map[pos] = node;
                 p += 1;
             }
             if (w > LEAF_CANDS) {
@@ -113,6 +120,9 @@ kdt_in:
         }
         goto kdt_in;
     }
+
+    pos = (node->value[0] - t->start)/t->k;
+    t->map[pos] = node;
 
     node->left = kdt_new_in(t, points, median, depth + 1);
     node->right = kdt_new_in(t, points+median+1, nb_points - median - 1, depth+1);
@@ -203,6 +213,7 @@ void kdt_new(kd_tree *t, int *points, int nb_points, int k)
 {
     int i;
     t->points = malloc(nb_points*sizeof(int*));
+    t->map = malloc(nb_points*sizeof(kd_node*));
     for (i = 0; i < nb_points; i++) t->points[i] = points+i*k;
     t->start = points;
     t->k = k; // dimensionality
@@ -509,51 +520,6 @@ static IplImage* match2(kd_tree *t, int *coeffs, CvSize s)
     return img;
 }
 
-static kd_node** get_block_positions(kd_tree *t, int *coeffs, CvSize s)
-{
-    int i, j;
-    CvSize size = {s.width/8, s.height/8};
-    kd_node **nodes = malloc(size.width*size.height*sizeof(kd_node*));
-    kd_node **n = nodes;
-    for (i = 0; i < size.height; i++) {
-        for (j = 0; j < size.width; j++) {
-            kd_node *kdn = kdt_query(t, coeffs);
-            int idx = find_match_idx(coeffs, kdn, t->k);
-            if (-1 == idx) {
-                fprintf(stderr, "Bad offset index (%d,%d)", j, i);
-                print_tuple(coeffs, 1, t->k);
-            }
-            else kdn->xy[idx] = XY_TO_INT(j, i);
-            *n++ = kdn;
-            coeffs += t->k;
-        }
-    }
-    return nodes;
-}
-
-static kd_node** get_positions(kd_tree *t, int *coeffs, CvSize s,
-    int kern_size)
-{
-    int i, j;
-    int w = s.width - kern_size + 1, h = s.height - kern_size + 1;
-    kd_node **nodes = malloc(s.width*s.height*sizeof(kd_node*));
-    kd_node **n = nodes;
-    for (i = 0; i < h; i++) {
-        for (j = 0; j < w; j++) {
-            kd_node *kdn = kdt_query(t, coeffs);
-            int idx = find_match_idx(coeffs, kdn, t->k);
-            if (-1 == idx) {
-                fprintf(stderr, "Bad offset index (%d,%d)", j, i);
-                print_tuple(coeffs, 1, t->k);
-            }
-            else kdn->xy[idx] = XY_TO_INT(j, i);
-            *n++ = kdn;
-            coeffs += t->k;
-        }
-    }
-    return nodes;
-}
-
 static int test_positions(kd_tree *t, int *coeffs, int nb)
 {
     int i, errors = 0;
@@ -694,10 +660,6 @@ static void test_wht()
     kdt_new(&kdt, c_src, sz, dim);
     printf("finished building tree\n");
 
-    kd_node **pos = get_block_positions(&kdt, c_src, size);
-    printf("got positions\n");
-    free(pos);
-
     //IplImage *matched = match(&kdt, c_src, cvGetSize(src));
     //IplImage *matched = match(&kdt, c_dst, cvGetSize(dst));
     //printf("got matches\n");
@@ -826,7 +788,7 @@ static int64_t check_match(int *coeffs, kd_node *n, int k, int best)
 }
 
 static uint64_t best_match(kd_tree *t, int *coeffs, int x, int y,
-    kd_node **prev, kd_node **map, int w, int h, int dir)
+    kd_node **prev, int w, int h, int dir)
 {
 #define QSZ 10
 
@@ -837,6 +799,7 @@ static uint64_t best_match(kd_tree *t, int *coeffs, int x, int y,
     int64_t res;
     kd_node *queue[QSZ];
     kd_node *n = kdt_query(t, coeffs);
+    kd_node **map = t->map;
 
     res = check_match(coeffs, n, k, best);
     if (res != -1) {
@@ -904,7 +867,7 @@ static uint64_t best_match(kd_tree *t, int *coeffs, int x, int y,
 }
 
 IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
-    kd_node **xy_map, CvSize dst_size)
+    CvSize dst_size)
 {
     IplImage *xy = cvCreateImage(dst_size, IPL_DEPTH_32S, 1);
     IplImage *dst = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
@@ -921,7 +884,7 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
             node = nodes;
             xydata = (int*)xy->imageData + y*(xy->widthStep/sizeof(int));
         }
-        res = best_match(t, coeffs, x, y, node, xy_map, sw, sh, -1);
+        res = best_match(t, coeffs, x, y, node, sw, sh, -1);
         sxy = UNPACK_IDX(res); sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
         *scores++ = UNPACK_SCORE(res);
         *xydata++ = sxy;
@@ -1104,10 +1067,9 @@ static void test_complete()
     t3 = get_time();
     kdt_new(&kdt, i, sz, dim);
     t4 = get_time();
-    kd_node** map = get_positions(&kdt, i, src_size, 8);
     t5 = get_time();
 
-    IplImage *matched = match_complete(&kdt, di, src, map, dst_size);
+    IplImage *matched = match_complete(&kdt, di, src, dst_size);
     t6 = get_time();
     IplImage *matched3 = match_complete3(&kdt, di, src, dst_size);
     IplImage *matched2 = match_complete2(&kdt, di, src, dst_size);
@@ -1134,7 +1096,6 @@ static void test_complete()
     kdt_free(&kdt);
     free(i);
     free(di);
-    free(map);
     cvReleaseImage(&src);
     cvReleaseImage(&dst);
     cvReleaseImage(&matched);
