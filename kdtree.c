@@ -31,12 +31,13 @@ typedef struct kd_node {
     int **value;
 } kd_node;
 typedef struct kd_tree {
-    int k;
+    int k, nb_nodes;
     int *order;
     int **points;
     int *start;
     kd_node *root;
     kd_node **map;
+    kd_node *nodes;
 } kd_tree;
 
 static void print_tuple(int *a, int nb, int tsz)
@@ -56,7 +57,7 @@ static kd_node *kdt_new_in(kd_tree *t, int **points,
 {
     if (0 >= nb_points) return NULL;
     int axis = t->order[depth % t->k], median, loops = 1, pos;
-    kd_node *node = malloc(sizeof(kd_node));
+    kd_node *node = &t->nodes[t->nb_nodes++];
 
     if (nb_points <= LEAF_CANDS) {
         int i, **p = points;
@@ -150,20 +151,12 @@ kd_node* kdt_query(kd_tree *t, int *points)
     return kdt_query_in(t->root, 0, points, t->k);
 }
 
-static void kdt_free_in(kd_node **n)
-{
-    kd_node *m = *n;
-    if (m->left) kdt_free_in(&m->left);
-    if (m->right) kdt_free_in(&m->right);
-    free(m);
-    *n = NULL;
-}
-
 static void kdt_free(kd_tree *t)
 {
     if (t->order) free(t->order);
-    kdt_free_in(&t->root);
     if (t->points) free(t->points);
+    if (t->nodes) free(t->nodes);
+    if (t->map) free(t->map);
 }
 
 typedef struct {
@@ -214,7 +207,9 @@ void kdt_new(kd_tree *t, int *points, int nb_points, int k)
     int i;
     t->points = malloc(nb_points*sizeof(int*));
     t->map = malloc(nb_points*sizeof(kd_node*));
+    t->nodes = malloc(nb_points*sizeof(kd_node));
     for (i = 0; i < nb_points; i++) t->points[i] = points+i*k;
+    t->nb_nodes = 0;
     t->start = points;
     t->k = k; // dimensionality
     t->order = calc_dimstats(points, nb_points, k);
