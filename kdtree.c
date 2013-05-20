@@ -101,11 +101,7 @@ kdt_in:
                     if (!memcmp(*p, *q, t->k*sizeof(int))) break;
                     q += 1;
                 }
-                if (i == w) {
-                    int **u = points+w;
-                    if (*u != *p) memcpy(*u, *p, t->k*sizeof(int));
-                    w++;
-                }
+                if (i == w) points[w++] = *p;
                 pos = (*p - t->start)/t->k;
                 t->map[pos] = node;
                 p += 1;
