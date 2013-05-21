@@ -770,14 +770,6 @@ static int64_t match_score(int *coeffs, kd_node *n, int k)
     return PACK_SCOREIDX(best, idx);
 }
 
-static int64_t check_match(int *coeffs, kd_node *n, int k, int best)
-{
-    int64_t res = match_score(coeffs, n, k);
-    int attempt = UNPACK_SCORE(res);
-    if (attempt < best) return res;
-    return -1;
-}
-
 static int patch_score(int *c1, int *c2, int k)
 {
     int i, dist = 0;
@@ -842,77 +834,6 @@ static unsigned match_enrich(kd_tree *t, int *coeffs, int x, int y,
     return XY_TO_INT(x1, y1);
 }
 
-static uint64_t best_match(kd_tree *t, int *coeffs, int x, int y,
-    kd_node **prev, int w)
-{
-#define QSZ 10
-
-#define ADDQ(q) {if (qsize < QSZ) queue[qsize++] = (q);}
-
-    int k = t->k, best = INT_MAX, idx = -1, qsize = 0, i, xy, x1, y1;
-    unsigned bestxy = 0;
-    int64_t res;
-    kd_node *queue[QSZ];
-    kd_node *n = kdt_query(t, coeffs);
-    kd_node **map = t->map;
-
-    res = check_match(coeffs, n, k, best);
-    if (res != -1) {
-        best = UNPACK_SCORE(res);
-        idx = UNPACK_IDX(res);
-        int *points = n->value[idx];
-        xy = (points - t->start)/t->k;
-        x1 = xy % w, y1 = xy/w;
-        bestxy = XY_TO_INT(x1, y1);
-        if (y1) ADDQ(map[(y1-1)*w+x1]);
-        if (x1) ADDQ(map[y1*w+x1-1]);
-    }
-
-    // for better *perceptual* uniformity: check, but don't include
-    // adjacent pixels. For *numerical* uniformity, include adjacent
-    if (y) {
-        res = check_match(coeffs, prev[0], k, best);
-        if (res != -1) {
-        int *points = prev[0]->value[UNPACK_IDX(res)];
-        xy = (points - t->start)/t->k;
-        x1 = xy % w, y1 = xy/w;
-        if (y1) ADDQ(map[(y1-1)*w+x1]);
-        if (x1) ADDQ(map[y1*w+x1-1]);
-        }
-    }
-
-    if (x) {
-        res = check_match(coeffs, prev[-1], k, best);
-        if (res != -1) {
-            int *points = prev[-1]->value[UNPACK_IDX(res)];
-            xy = (points - t->start)/t->k;
-            x1 = xy % w, y1 = xy/w;
-            if (y1) ADDQ(map[(y1-1)*w+x1]);
-            if (x1) ADDQ(map[y1*w+x1-1]);
-        }
-    }
-
-    for (i = 0; i < qsize; i++) {
-        res = check_match(coeffs, queue[i], k, best);
-        if (res != -1) {
-            best = UNPACK_SCORE(res);
-            idx = UNPACK_IDX(res);
-            n = queue[i];
-            int *points = n->value[idx];
-            xy = (points - t->start)/t->k;
-            x1 = xy % w, y1 = xy/w;
-            bestxy = XY_TO_INT(x1, y1);
-            if (y1) ADDQ(map[(y1-1)*w+x1]);
-            if (x1) ADDQ(map[y1*w+x1-1]);
-        }
-    }
-    *prev = n;
-    return PACK_SCOREIDX(best, bestxy);
-
-#undef QSZ
-#undef ADDQ
-}
-
 IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
     CvSize dst_size)
 {
@@ -920,17 +841,14 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
     IplImage *dst = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     int w = dst_size.width  - 8 + 1, h = dst_size.height - 8 + 1;
     int k = t->k, sz = w*h, i, sw = src->width - 8 + 1;
-    kd_node **nodes = malloc(w*sizeof(kd_node*)*2), **node;
     int *prevs = malloc(w*sizeof(int)*2), *prev = prevs;
     int *xydata = (int*)xy->imageData;
     for (i = 0; i < sz; i++) {
         int x = i % w, y = i/w, sx, sy, sxy;
         if (!x) {
-            node = nodes;
             prev = prevs;
             xydata = (int*)xy->imageData + y*(xy->widthStep/sizeof(int));
         }
-        //res = best_match(t, coeffs, x, y, node, sw);
         sxy = match_enrich(t, coeffs, x, y, prev, sw);
         sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
         *xydata++ = sxy;
@@ -938,11 +856,8 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
             printf("grievous error: got %d,%d but dims %d,%d sxy %d\n", sx, sy, src->width, src->height, sxy);
         }
         coeffs += k;
-        //node += 2;
-        //node += 1;
         prev += 2;
     }
-    free(nodes);
     free(prevs);
     xy2img(xy, src, dst);
     cvReleaseImage(&xy);
