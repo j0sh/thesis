@@ -778,6 +778,66 @@ static int64_t check_match(int *coeffs, kd_node *n, int k, int best)
     return -1;
 }
 
+static void swapbest(kd_node **n, int *scores, int *index)
+{
+    kd_node *p = n[0];
+    n[0] = n[1];
+    n[1] = p;
+    int t = scores[0];
+    scores[0] = scores[1];
+    scores[1] = t;
+    int u = index[0];
+    index[0] = index[1];
+    index[1] = u;
+}
+
+static void set_best(int *coeffs, kd_node *n, kd_node **nodes,
+    int *scores, int *indexes, int k)
+{
+    uint64_t res = match_score(coeffs, n, k);
+    int attempt = UNPACK_SCORE(res);
+    if (attempt < scores[0]) {
+        nodes[0] = n;
+        scores[0] = attempt;
+        indexes[0] = UNPACK_IDX(res);
+        if (scores[0] < scores[1]) swapbest(nodes, scores, indexes);
+    }
+}
+
+static uint64_t match_enrich(kd_tree *t, int *coeffs, int x, int y,
+    kd_node **prev, int w)
+{
+    int k = t->k, xy, x1, y1, *points;
+    kd_node *n[]  = {NULL, kdt_query(t, coeffs)};
+
+    // set results of query
+    int64_t res = match_score(coeffs, n[1], k);
+    int best[] = {INT_MAX, UNPACK_SCORE(res)};
+    int index[] = {-1, UNPACK_IDX(res)};
+
+    n[0] = n[1]; // lazy hack for (x,y) == (0,0)
+
+    // now check 2 best matches for the left
+    if (x) {
+        set_best(coeffs, prev[-1], n, best, index, k);
+        set_best(coeffs, prev[-2], n, best, index, k);
+    }
+
+    // check 2 best matches for top
+    if (y) {
+        set_best(coeffs, prev[0], n, best, index, k);
+        set_best(coeffs, prev[1], n, best, index, k);
+    }
+
+    // set prev to best matches
+    prev[0] = n[0];
+    prev[1] = n[1];
+    points = n[1]->value[index[1]];
+    xy = (points - t->start)/t->k;
+    x1 = xy % w, y1 = xy / w;
+    return XY_TO_INT(x1, y1);
+}
+
 static uint64_t best_match(kd_tree *t, int *coeffs, int x, int y,
     kd_node **prev, int w)
 {
@@ -856,7 +916,7 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
     IplImage *dst = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     int w = dst_size.width  - 8 + 1, h = dst_size.height - 8 + 1;
     int k = t->k, sz = w*h, i, sw = src->width - 8 + 1;
-    kd_node **nodes = malloc(w*sizeof(kd_node*)), **node;
+    kd_node **nodes = malloc(w*sizeof(kd_node*)*2), **node;
     int *scores = malloc(sz*sizeof(int)), *s = scores;
     int *xydata = (int*)xy->imageData;
     for (i = 0; i < sz; i++) {
@@ -866,7 +926,8 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
             node = nodes;
             xydata = (int*)xy->imageData + y*(xy->widthStep/sizeof(int));
         }
-        res = best_match(t, coeffs, x, y, node, sw);
+        //res = best_match(t, coeffs, x, y, node, sw);
+        res = match_enrich(t, coeffs, x, y, node, sw);
         sxy = UNPACK_IDX(res); sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
         *scores++ = UNPACK_SCORE(res);
         *xydata++ = sxy;
@@ -874,7 +935,8 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
             printf("grievous error: got %d,%d but dims %d,%d sxy %d\n", sx, sy, src->width, src->height, sxy);
         }
         coeffs += k;
-        node++;
+        node += 2;
+        //node += 1;
     }
     free(s);
     free(nodes);
