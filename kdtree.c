@@ -778,6 +778,22 @@ static int64_t check_match(int *coeffs, kd_node *n, int k, int best)
     return -1;
 }
 
+typedef struct kd_match {
+    kd_node *n[2];  // node; we keep 2 matches for each query
+    int i[2];       // index of matched patch within node
+} kd_match;
+
+static int idx_score(int *coeffs, kd_node *n, int idx, int k)
+{
+    int i, *p = n->value[idx], dist = 0;
+    for (i = 0; i < k; i++) {
+        int a = *coeffs++;
+        int b = *p++;
+        dist += (a-b)*(a-b);
+    }
+    return dist;
+}
+
 static void swapbest(kd_node **n, int *scores, int *index)
 {
     kd_node *p = n[0];
@@ -804,8 +820,20 @@ static void set_best(int *coeffs, kd_node *n, kd_node **nodes,
     }
 }
 
+static void check_guide(int *coeffs, kd_node *n, int idx,
+    kd_node **nodes, int *scores, int *indexes, int k)
+{
+    int attempt = idx_score(coeffs, n, idx, k);
+    if (attempt < scores[0]) {
+        nodes[0] = n;
+        scores[0] = attempt;
+        indexes[0] = idx;
+        if (scores[0] < scores[1]) swapbest(nodes, scores, indexes);
+    }
+}
+
 static uint64_t match_enrich(kd_tree *t, int *coeffs, int x, int y,
-    kd_node **prev, int w)
+    kd_match *prev, int w)
 {
     int k = t->k, xy, x1, y1, *points;
     kd_node *n[]  = {NULL, kdt_query(t, coeffs)};
@@ -819,19 +847,23 @@ static uint64_t match_enrich(kd_tree *t, int *coeffs, int x, int y,
 
     // now check 2 best matches for the left
     if (x) {
-        set_best(coeffs, prev[-1], n, best, index, k);
-        set_best(coeffs, prev[-2], n, best, index, k);
+        kd_match *p = &prev[-1];
+        check_guide(coeffs, p->n[0], p->i[0], n, best, index, k);
+        check_guide(coeffs, p->n[1], p->i[1], n, best, index, k);
     }
 
     // check 2 best matches for top
     if (y) {
-        set_best(coeffs, prev[0], n, best, index, k);
-        set_best(coeffs, prev[1], n, best, index, k);
+        kd_match *p = &prev[0];
+        check_guide(coeffs, p->n[0], p->i[0], n, best, index, k);
+        check_guide(coeffs, p->n[1], p->i[1], n, best, index, k);
     }
 
     // set prev to best matches
-    prev[0] = n[0];
-    prev[1] = n[1];
+    prev[0].n[0] = n[0];
+    prev[0].n[1] = n[1];
+    prev[0].i[0] = index[0];
+    prev[0].i[1] = index[1];
     points = n[1]->value[index[1]];
     xy = (points - t->start)/t->k;
     x1 = xy % w, y1 = xy / w;
@@ -917,6 +949,7 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
     int w = dst_size.width  - 8 + 1, h = dst_size.height - 8 + 1;
     int k = t->k, sz = w*h, i, sw = src->width - 8 + 1;
     kd_node **nodes = malloc(w*sizeof(kd_node*)*2), **node;
+    kd_match *matches = malloc(w*sizeof(kd_match)), *match;
     int *scores = malloc(sz*sizeof(int)), *s = scores;
     int *xydata = (int*)xy->imageData;
     for (i = 0; i < sz; i++) {
@@ -924,10 +957,11 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
         uint64_t res;
         if (!x) {
             node = nodes;
+            match = matches;
             xydata = (int*)xy->imageData + y*(xy->widthStep/sizeof(int));
         }
         //res = best_match(t, coeffs, x, y, node, sw);
-        res = match_enrich(t, coeffs, x, y, node, sw);
+        res = match_enrich(t, coeffs, x, y, match, sw);
         sxy = UNPACK_IDX(res); sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
         *scores++ = UNPACK_SCORE(res);
         *xydata++ = sxy;
@@ -935,8 +969,9 @@ IplImage* match_complete(kd_tree *t, int *coeffs, IplImage *src,
             printf("grievous error: got %d,%d but dims %d,%d sxy %d\n", sx, sy, src->width, src->height, sxy);
         }
         coeffs += k;
-        node += 2;
+        //node += 2;
         //node += 1;
+        match += 1;
     }
     free(s);
     free(nodes);
