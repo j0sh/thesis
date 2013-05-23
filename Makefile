@@ -3,7 +3,7 @@ CFLAGS=-Wall -Wextra -Wno-unused-function -D_GNU_SOURCE -g
 DEPS=$(shell pkg-config --cflags --libs opencv libavdevice libswscale)
 
 OTHER=test stream face histogram hc bkg patch fill
-OBJS=encode.o capture.o wht.o gck.o select.o kdtree.o
+OBJS=encode.o capture.o wht.o gck.o select.o kdtree.o prop.o
 
 all: fill
 
