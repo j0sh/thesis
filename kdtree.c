@@ -41,12 +41,12 @@ static kd_node *kdt_new_in(kd_tree *t, int **points,
     }
 kdt_in:
 
-    median = quick_select2(points, nb_points, axis);
+    median = quick_select(points, nb_points, axis);
     node->value = points+median;
     node->val = node->value[0][axis];
     node->axis = axis;
 
-    pivot2(points, nb_points, axis, node->val);
+    pivot(points, nb_points, axis, node->val);
 
     while ((nb_points - (median+1)) &&
            points[median+1][axis] <= node->val) {
