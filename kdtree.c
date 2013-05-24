@@ -26,6 +26,7 @@ static kd_node *kdt_new_in(kd_tree *t, int **points,
 {
     if (0 >= nb_points) return NULL;
     int axis = t->order[depth % t->k], median, loops = 1, pos;
+    int completelybroken = 0;
     kd_node *node = &t->nodes[t->nb_nodes++];
 
     if (nb_points <= LEAF_CANDS) {
@@ -48,7 +49,7 @@ kdt_in:
 
     pivot(points, nb_points, axis, node->val);
 
-    while ((nb_points - (median+1)) &&
+    while (!completelybroken && (nb_points - (median+1)) &&
            points[median+1][axis] <= node->val) {
         // make nodes with the same value as the median at the axis
         // fall on the left side of the tree by bumping up the median
@@ -59,7 +60,7 @@ kdt_in:
         depth += 1;
         axis = t->order[depth % t->k];
         loops++;
-        if (loops == t->k) {
+        if (loops >= t->k) {
             // we have actually gone through every single element here
             // and each dimension is ALMOST the same as its neighbor
             // so search for uniques
@@ -75,8 +76,10 @@ kdt_in:
                 t->map[pos] = node;
                 p += 1;
             }
+            if (w == r) completelybroken = 1;
             if (w > LEAF_CANDS) {
                 nb_points = w;
+                loops = 1;
                 goto kdt_in;
             }
             node->left = node->right = NULL;
