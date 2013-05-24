@@ -93,9 +93,9 @@ static inline void check_guide(kd_tree *t, int *coeffs, int off,
 }
 
 static unsigned match_enrich(kd_tree *t, int *coeffs, int x, int y,
-    int *prev, int w)
+    int *prev)
 {
-    int k = t->k, xy, x1, y1, *start = t->start;
+    int k = t->k, *start = t->start;
     kd_node *n  = kdt_query(t, coeffs);
 
     // set results of query
@@ -120,9 +120,7 @@ static unsigned match_enrich(kd_tree *t, int *coeffs, int x, int y,
     // set prev to best matches
     prev[0] = pos[0];
     prev[1] = pos[1];
-    xy = pos[1]/k;
-    x1 = xy % w, y1 = xy / w;
-    return XY_TO_INT(x1, y1);
+    return pos[1];
 }
 
 static IplImage* match(kd_tree *t, int *coeffs, IplImage *src,
@@ -140,9 +138,9 @@ static IplImage* match(kd_tree *t, int *coeffs, IplImage *src,
             prev = prevs;
             xydata = (int*)xy->imageData + y*(xy->widthStep/sizeof(int));
         }
-        sxy = match_enrich(t, coeffs, x, y, prev, sw);
-        sx = XY_TO_X(sxy); sy = XY_TO_Y(sxy);
-        *xydata++ = sxy;
+        sxy = match_enrich(t, coeffs, x, y, prev) / k;
+        sx = sxy % sw; sy = sxy / sw;
+        *xydata++ = XY_TO_INT(sx, sy);
         if (sx >= src->width || sy >= src->height) {
             printf("grievous error: got %d,%d but dims %d,%d sxy %d\n", sx, sy, src->width, src->height, sxy);
         }
