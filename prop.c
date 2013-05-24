@@ -231,6 +231,7 @@ IplImage* prop_match(IplImage *src, IplImage *dst)
     matched  = match(&kdt, dstdata, src, dst_size);
     free(srcdata);
     free(dstdata);
+    kdt_free(&kdt);
     return matched;
 }
 
