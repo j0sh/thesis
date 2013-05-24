@@ -326,6 +326,29 @@ static IplImage* match2(kd_tree *t, int *coeffs, CvSize s)
     return img;
 }
 
+static IplImage* match3(kd_tree *t, int *coeffs, CvSize s)
+{
+    int x, y, k = t->k;
+    CvSize size = {s.width/8, s.height/8};
+    int *prevs = malloc(s.width*sizeof(int)*2), *prev = prevs;
+    int *newcoeffs = malloc(sizeof(int)*size.width*size.height*k);
+    int *c = newcoeffs;
+    unsigned xy;
+    for (y = 0; y < size.height; y++) {
+        for (x = 0; x < size.width; x++) {
+            if (!x) prev = prevs;
+            xy = prop_enrich(t, coeffs, x, y, prev);
+            memcpy(newcoeffs, t->start+xy, k*sizeof(int));
+            coeffs += k;
+            newcoeffs += k;
+            prev += 2;
+        }
+    }
+    IplImage *img = splat(c, s, k);
+    free(c);
+    return img;
+}
+
 static int test_positions(kd_tree *t, int *coeffs, int nb)
 {
     int i, errors = 0;
@@ -462,9 +485,11 @@ static void test_gck2()
     kdt_new(&kdt, i, sz, dim);
     IplImage *matched = match(&kdt, c_dst, cvGetSize(dst));
     IplImage *matched2 = match2(&kdt, c_dst, cvGetSize(dst));
+    IplImage *matched3 = match3(&kdt, c_dst, cvGetSize(dst));
     cvShowImage("src", src);
     cvShowImage("matched", matched);
     cvShowImage("matched2", matched2);
+    cvShowImage("matched3", matched3);
     cvWaitKey(0);
 
     kdt_free(&kdt);
@@ -472,6 +497,7 @@ static void test_gck2()
     free(c_dst);
     cvReleaseImage(&matched);
     cvReleaseImage(&matched2);
+    cvReleaseImage(&matched3);
     cvReleaseImage(&src);
     cvReleaseImage(&dst);
 }
