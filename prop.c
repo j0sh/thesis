@@ -244,3 +244,8 @@ IplImage *prop_match_complete(kd_tree *kdt, int *data, IplImage *src,
 {
     return match(kdt, data, src, dst_size);
 }
+
+unsigned prop_enrich(kd_tree *t, int *coeffs, int x, int y, int *prev)
+{
+    return match_enrich(t, coeffs, x, y, prev);
+}
