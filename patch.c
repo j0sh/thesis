@@ -161,28 +161,76 @@ static void xy2img(IplImage *xy, IplImage *img, IplImage *recon)
 #undef PATCH_W
 #undef RS_MAX
 
+#include <sys/time.h>
+static inline double get_time()
+{
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    return t.tv_sec + t.tv_usec * 1e-6;
+}
+
+static int64_t sumimg(IplImage *img, int kern)
+{
+    int64_t sum = 0;
+    int i, j;
+    uint8_t *data;
+    for (i = 0; i < img->height; i++) {
+        data =  (uint8_t*)img->imageData + i*img->widthStep;
+        for (j = 0; j < img->width - kern + 1; j++) {
+            sum += *data++;
+            sum += *data++;
+            sum += *data++;
+        }
+    }
+    return sum;
+}
+
 int main(int argc, char **argv)
 {
 #define NEWIMG(s) cvLoadImage(s, CV_LOAD_IMAGE_COLOR)
     // 19 - 22 are 'similar'
-    IplImage *a = NEWIMG("frames/bbb22.png");
-    IplImage *b = NEWIMG("frames/bbb19.png");
+    char *s, *d, *g;
+    if (argc < 4) {
+        s = "frames/bbb19.png";
+        d = "frames/bbb22.png";
+        g = "bbb-gt.png";
+    } else {
+        s = argv[1];
+        d = argv[2];
+        g = argv[3];
+    }
+    IplImage *a = NEWIMG(d);
+    IplImage *b = NEWIMG(s);
+    IplImage *gt = NEWIMG(g);
 #undef NEWIMG
     CvSize size = cvGetSize(a);
     IplImage *ann = cvCreateImage(size, IPL_DEPTH_32S, 1);
     IplImage *annd = cvCreateImage(size, IPL_DEPTH_32S, 1);
     IplImage *recon = cvCreateImage(size, a->depth, a->nChannels);
+    IplImage *diff = cvCreateImage(size, a->depth, a->nChannels);
+    IplImage *gtdiff = cvCreateImage(size, a->depth, a->nChannels);
+    IplImage *diff2 = cvCreateImage(size, a->depth, a->nChannels);
+    double start, end;
 
+    printf("patchmatch: \"%s\" \"%s\" \"%s\"\n", s, d, g);
+    start = get_time();
     patchmatch(a, b, ann, annd);
     xy2img(ann, b, recon);
+    end = get_time();
+    cvAbsDiff(recon, a, diff);
+    cvAbsDiff(gt, a, gtdiff);
+    cvAbsDiff(gt, recon, diff2);
+    printf("elapsed: %f\n", (end - start)*1000);
+    printf("match-gt %lld\n", sumimg(diff2, 1));
 
-    cvShowImage("a", a);
+    /*cvShowImage("a", a);
     cvShowImage("b", b);
     cvShowImage("recon", recon);
+    cvShowImage("diff", diff);
     cvMoveWindow("a", 0, 0);
     cvMoveWindow("b", 480, 0);
     cvMoveWindow("recon", 0, 400);
-    cvWaitKey(0);
+    cvWaitKey(0);*/
     cvReleaseImage(&a);
     cvReleaseImage(&b);
     cvReleaseImage(&ann);
