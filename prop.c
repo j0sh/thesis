@@ -188,9 +188,7 @@ static void coeffs_i(IplImage *img, int bases, int total_b, int *data)
     free(res);
 }
 
-static void coeffs(IplImage *img, int dim, int **in) {
-    if (dim != 27) return; // temporary; nothing else supported
-
+static void coeffs(IplImage *img, int dim, int *pc, int **in) {
     CvSize size = cvGetSize(img);
     IplImage *lab = cvCreateImage(size, IPL_DEPTH_8U, 3);
     IplImage *l = cvCreateImage(size, IPL_DEPTH_8U, 1);
@@ -202,11 +200,11 @@ static void coeffs(IplImage *img, int dim, int **in) {
     cvCvtColor(img, lab, CV_BGR2Lab);
     cvSplit(lab, l, a, b, NULL);
 
-    coeffs_i(l, 25, 27, interleaved);
+    coeffs_i(l, pc[0], dim, interleaved);
 
-    coeffs_i(a, 1, 27, interleaved+25);
+    coeffs_i(a, pc[1], dim, interleaved+pc[0]);
 
-    coeffs_i(b, 1, 27, interleaved+26);
+    coeffs_i(b, pc[2], dim, interleaved+pc[0]+pc[1]);
 
     cvReleaseImage(&lab);
     cvReleaseImage(&l);
@@ -221,11 +219,11 @@ IplImage* prop_match(IplImage *src, IplImage *dst)
     int *srcdata, *dstdata;
     CvSize src_size = cvGetSize(src), dst_size = cvGetSize(dst);
     int w1 = src_size.width - 8 + 1, h1 = src_size.height - 8 + 1;
-    int dim = 27, sz = w1*h1;
+    int dim = 27, sz = w1*h1, plane_coeffs[] = {25, 1, 1};
     kd_tree kdt;
     IplImage *matched;
-    coeffs(src, dim, &srcdata);
-    coeffs(dst, dim, &dstdata);
+    coeffs(src, dim, plane_coeffs, &srcdata);
+    coeffs(dst, dim, plane_coeffs, &dstdata);
     memset(&kdt, 0, sizeof(kdt));
     kdt_new(&kdt, srcdata, sz, dim);
     matched  = match(&kdt, dstdata, src, dst_size);
@@ -237,7 +235,8 @@ IplImage* prop_match(IplImage *src, IplImage *dst)
 
 void prop_coeffs(IplImage *src, int dim, int **data)
 {
-    return coeffs(src, dim, data);
+    static int plane_coeffs[] = {25, 1, 1};
+    return coeffs(src, dim, plane_coeffs, data);
 }
 
 IplImage *prop_match_complete(kd_tree *kdt, int *data, IplImage *src,
