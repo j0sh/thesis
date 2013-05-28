@@ -2,10 +2,10 @@ ENV=LD_RUN_PATH=/home/josh/compiled/lib
 CFLAGS=-Wall -Wextra -Wno-unused-function -D_GNU_SOURCE -g
 DEPS=$(shell pkg-config --cflags --libs opencv libavdevice libswscale)
 
-OTHER=test stream face histogram hc bkg patch fill kdtest
+OTHER=test stream face histogram hc bkg patch fill kdtest gt
 OBJS=encode.o capture.o wht.o gck.o select.o kdtree.o prop.o
 
-all: kdtest
+all: gt
 
 $(OBJS): %.o : %.h
 	$(ENV) gcc $(CFLAGS) $(DEPS) -c $(OBJS:.o=.c)
