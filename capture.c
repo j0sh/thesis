@@ -15,8 +15,7 @@ static int add_decoder(capture_t *ctx)
     if (avcodec_open2(c, codec, NULL)) ERR("avcodec_open2");
     ctx->picture = avcodec_alloc_frame();
     if (codec->capabilities & CODEC_CAP_DR1) {
-        c->get_buffer = avcodec_default_get_buffer;
-        c->release_buffer = avcodec_default_release_buffer;
+        c->get_buffer2 = avcodec_default_get_buffer2;
     }
     return 0;
 }

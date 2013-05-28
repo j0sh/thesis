@@ -74,6 +74,7 @@ static void print_mbinfo(uint8_t* mbinfo, int w, int h)
     free(str);
 }
 
+#if 0
 static void print_offsets(float* offsets, int w, int h)
 {
     int mb_x = w/16 + (0 != w % 16), mb_y = h/16 + (0 != h % 16);
@@ -92,6 +93,7 @@ static void print_offsets(float* offsets, int w, int h)
     printf("Offset Blocks\n%s\n", str);
     free(str);
 }
+#endif
 
 int start_encode(encode_t *enc, int width, int height, uint8_t *in)
 {
