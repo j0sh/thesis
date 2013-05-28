@@ -1,0 +1,3 @@
+#!/bin/bash
+# Requires that gt.ml be built from the included Makefile
+find /home/josh/Desktop/vidpairs/*.jpg | xargs -d '\n' -L 2 ./launchgt.sh
