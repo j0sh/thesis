@@ -197,7 +197,7 @@ static void coeffs(IplImage *img, int dim, int *pc, int **in) {
     int w = size.width, h = size.height;
     int *interleaved = gck_alloc_buffer(w, h, 8, dim);
 
-    cvCvtColor(img, lab, CV_BGR2Lab);
+    cvCvtColor(img, lab, CV_BGR2YCrCb);
     cvSplit(lab, l, a, b, NULL);
 
     coeffs_i(l, pc[0], dim, interleaved);
@@ -219,7 +219,8 @@ IplImage* prop_match(IplImage *src, IplImage *dst)
     int *srcdata, *dstdata;
     CvSize src_size = cvGetSize(src), dst_size = cvGetSize(dst);
     int w1 = src_size.width - 8 + 1, h1 = src_size.height - 8 + 1;
-    int dim = 27, sz = w1*h1, plane_coeffs[] = {25, 1, 1};
+    int sz = w1*h1, plane_coeffs[] = {10, 3, 3};
+    int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     kd_tree kdt;
     IplImage *matched;
     coeffs(src, dim, plane_coeffs, &srcdata);
