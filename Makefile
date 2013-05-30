@@ -1,5 +1,5 @@
 ENV=LD_RUN_PATH=/home/josh/compiled/lib
-CFLAGS=-Wall -Wextra -Wno-unused-function -D_GNU_SOURCE -g
+CFLAGS=-Wall -Wextra -Wno-unused-function -D_GNU_SOURCE -O3
 DEPS=$(shell pkg-config --cflags --libs opencv libavdevice libswscale)
 
 OTHER=test stream face histogram hc bkg patch fill kdtest gt

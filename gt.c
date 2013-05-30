@@ -68,7 +68,7 @@ int main(int argc, char **argv)
         d = argv[2];
         g = argv[3];
     }
-    printf("src \"%s\" dst \"%s\" gt \"%s\"\n", s, d, g);
+    printf("gt: \"%s\" \"%s\" \"%s\"\n", s, d, g);
     IplImage *src = alignedImageFrom(s, 8);
     IplImage *dst = alignedImageFrom(d, 8);
     IplImage *gt = alignedImageFrom(g, 8);
@@ -83,12 +83,18 @@ int main(int argc, char **argv)
     cvAbsDiff(gt, dst, gtdiff);
     cvAbsDiff(match, dst, diff2);
     cvAbsDiff(gtdiff, diff2, diff3);
+    /*cvNamedWindow("match-gt", CV_WINDOW_NORMAL);
+    cvNamedWindow("gt", CV_WINDOW_NORMAL);
+    cvNamedWindow("match", CV_WINDOW_NORMAL);
+    cvResizeWindow("match-gt", 960, 400);
+    cvResizeWindow("gt", 960, 400);
+    cvResizeWindow("match", 960, 400);*/
     //cvShowImage("gt", gt);
     //cvShowImage("match-dst", diff2);
     //cvShowImage("match-gt", diff);
     //cvShowImage("gt-dst" , gtdiff);
     //cvShowImage("match", match);
-    cvShowImage("gtdiff - matchdiff", diff3);
+    //cvShowImage("gtdiff - matchdiff", diff3);
     printf("elapsed %f\n", (end-start)*1000);
     printf("match-gt %lld\n", sumimg(diff, 8));
     //cvWaitKey(0);
