@@ -9,13 +9,14 @@
 // maximum # of candidates per leaf
 #define LEAF_CANDS 8
 
-static void print_tuple(int *a, int nb, int tsz)
+static void print_tuple(int **a, int nb, int tsz)
 {
     int i, j;
     for (i = 0; i < nb; i++) {
+        int *p = a[i];
         fprintf(stderr, "{");
         for (j = 0; j < tsz; j++) {
-            fprintf(stderr, "%d,", a[i*tsz + j]);
+            fprintf(stderr, "%4d,", p[j]);
         }
         fprintf(stderr, "}\n");
     }
