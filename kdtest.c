@@ -23,13 +23,14 @@ static inline double get_time()
     return t.tv_sec + t.tv_usec * 1e-6;
 }
 
-static void print_tuple(int *a, int nb, int tsz)
+static void print_tuple(int **a, int nb, int tsz)
 {
     int i, j;
     for (i = 0; i < nb; i++) {
+        int *p = a[i];
         fprintf(stderr, "{");
         for (j = 0; j < tsz; j++) {
-            fprintf(stderr, "%d,", a[i*tsz + j]);
+            fprintf(stderr, "%d,", p[j]);
         }
         fprintf(stderr, "}\n");
     }
@@ -356,7 +357,7 @@ static int test_positions(kd_tree *t, int *coeffs, int nb)
         kd_node *kdn = kdt_query(t, coeffs);
         if (-1 == find_match_idx(coeffs, kdn, t->k)) {
             fprintf(stderr, "Unable to find elem at %d", i);
-            print_tuple(coeffs, 1, t->k);
+            print_tuple(&coeffs, 1, t->k);
             errors++;
         }
         coeffs += t->k;
