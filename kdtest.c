@@ -207,7 +207,7 @@ static IplImage* splat(int *coeffs, CvSize size, int dim)
 
     cvMerge(l, a, b, NULL, lab);
     cvConvertScale(lab, lab8, 1, 0);
-    cvCvtColor(lab8, img, CV_Lab2BGR);
+    cvCvtColor(lab8, img, CV_YCrCb2BGR);
 
     cvReleaseImage(&l);
     cvReleaseImage(&a);
@@ -377,7 +377,7 @@ static int* block_coeffs(IplImage *img, int dim) {
     int *buf = malloc(sizeof(int)*sz);
     unsigned *order = build_path(25, 8);
 
-    cvCvtColor(img, lab, CV_BGR2Lab);
+    cvCvtColor(img, lab, CV_BGR2YCrCb);
     cvSplit(lab, l, a, b, NULL);
 
     wht2d(l, trans);
