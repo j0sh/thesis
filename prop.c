@@ -234,9 +234,9 @@ IplImage* prop_match(IplImage *src, IplImage *dst)
     return matched;
 }
 
-void prop_coeffs(IplImage *src, int dim, int **data)
+void prop_coeffs(IplImage *src, int *plane_coeffs, int **data)
 {
-    static int plane_coeffs[] = {25, 1, 1};
+    int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     return coeffs(src, dim, plane_coeffs, data);
 }
 

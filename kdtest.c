@@ -183,10 +183,8 @@ unsigned* build_path(int n, int kern)
     return order;
 }
 
-static IplImage* splat(int *coeffs, CvSize size, int dim)
+static IplImage* splat(int *coeffs, CvSize size, int *plane_coeffs)
 {
-    if (dim != 27) return NULL; // temporary; nothing else supported
-
     IplImage *l = cvCreateImage(size, IPL_DEPTH_16S, 1);
     IplImage *a = cvCreateImage(size, IPL_DEPTH_16S, 1);
     IplImage *b = cvCreateImage(size, IPL_DEPTH_16S, 1);
@@ -194,16 +192,20 @@ static IplImage* splat(int *coeffs, CvSize size, int dim)
     IplImage *lab8= cvCreateImage(size, IPL_DEPTH_8U, 3);
     IplImage *img = cvCreateImage(size, IPL_DEPTH_8U, 3);
     IplImage *trans = cvCreateImage(size, IPL_DEPTH_16S, 1);
-    unsigned *order = build_path(25, 8);
+    int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
+    unsigned *order_luma = build_path(plane_coeffs[0], 8);
+    unsigned *order_chroma = build_path(plane_coeffs[1], 8);
 
     memset(trans->imageData, 0, trans->imageSize);
-    dequantize(trans, 25, order, 8, coeffs, dim);
+    dequantize(trans, plane_coeffs[0], order_luma, 8, coeffs, dim);
     iwht2d(trans, l);
     memset(trans->imageData, 0, trans->imageSize);
-    dequantize(trans, 1, order, 8, coeffs+25, dim);
+    dequantize(trans, plane_coeffs[1], order_chroma, 8,
+        coeffs+plane_coeffs[0], dim);
     iwht2d(trans, a);
     memset(trans->imageData, 0, trans->imageSize);
-    dequantize(trans, 1, order, 8, coeffs+26, dim);
+    dequantize(trans, plane_coeffs[2], order_chroma, 8,
+        coeffs+plane_coeffs[0]+plane_coeffs[1], dim);
     iwht2d(trans, b);
 
     cvMerge(l, a, b, NULL, lab);
@@ -216,7 +218,8 @@ static IplImage* splat(int *coeffs, CvSize size, int dim)
     cvReleaseImage(&lab);
     cvReleaseImage(&lab8);
     cvReleaseImage(&trans);
-    free(order);
+    free(order_luma);
+    free(order_chroma);
     return img;
 }
 
@@ -280,7 +283,7 @@ static void refine(int *coeffs, int *newcoeffs, kd_node **nodes,
     find_best_match(coeffs, newcoeffs, left, k, newbest);
 }
 
-static IplImage* match(kd_tree *t, int *coeffs, CvSize s)
+static IplImage* match(kd_tree *t, int *coeffs, CvSize s, int *pc)
 {
     int i, j, k = t->k, best;
     CvSize size = {s.width/8, s.height/8};
@@ -301,14 +304,14 @@ static IplImage* match(kd_tree *t, int *coeffs, CvSize s)
             newcoeffs += k;
         }
     }
-    IplImage *img = splat(c, s, k);
+    IplImage *img = splat(c, s, pc);
     free(nodes);
     free(c);
     return img;
 }
 
 // old stuff without refinement; remove soonish
-static IplImage* match2(kd_tree *t, int *coeffs, CvSize s)
+static IplImage* match2(kd_tree *t, int *coeffs, CvSize s, int *pc)
 {
     int i, j, k = t->k;
     CvSize size = {s.width/8, s.height/8};
@@ -322,12 +325,12 @@ static IplImage* match2(kd_tree *t, int *coeffs, CvSize s)
             newcoeffs += k;
         }
     }
-    IplImage *img = splat(c, s, k);
+    IplImage *img = splat(c, s, pc);
     free(c);
     return img;
 }
 
-static IplImage* match3(kd_tree *t, int *coeffs, CvSize s)
+static IplImage* match3(kd_tree *t, int *coeffs, CvSize s, int *pc)
 {
     int x, y, k = t->k;
     CvSize size = {s.width/8, s.height/8};
@@ -345,7 +348,7 @@ static IplImage* match3(kd_tree *t, int *coeffs, CvSize s)
             prev += 2;
         }
     }
-    IplImage *img = splat(c, s, k);
+    IplImage *img = splat(c, s, pc);
     free(c);
     return img;
 }
@@ -365,37 +368,40 @@ static int test_positions(kd_tree *t, int *coeffs, int nb)
     return errors;
 }
 
-static int* block_coeffs(IplImage *img, int dim) {
-    if (dim != 27) return NULL; // temporary; nothing else supported
-
+static int* block_coeffs(IplImage *img, int* plane_coeffs) {
     CvSize size = cvGetSize(img);
     IplImage *lab = cvCreateImage(size, IPL_DEPTH_8U, 3);
     IplImage *l = cvCreateImage(size, IPL_DEPTH_8U, 1);
     IplImage *a = cvCreateImage(size, IPL_DEPTH_8U, 1);
     IplImage *b = cvCreateImage(size, IPL_DEPTH_8U, 1);
     IplImage *trans = cvCreateImage(size, IPL_DEPTH_16S, 1);
+    int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     int sz = size.width*size.height/64*dim;
     int *buf = malloc(sizeof(int)*sz);
-    unsigned *order = build_path(25, 8);
+    unsigned *order_luma = build_path(plane_coeffs[0], 8);
+    unsigned *order_chroma = build_path(plane_coeffs[1], 8);
 
     cvCvtColor(img, lab, CV_BGR2YCrCb);
     cvSplit(lab, l, a, b, NULL);
 
     wht2d(l, trans);
-    quantize(trans, 25, 8, order, buf, dim);
+    quantize(trans, plane_coeffs[0], 8, order_luma, buf, dim);
 
     wht2d(a, trans);
-    quantize(trans, 1, 8, order, buf+25, dim);
+    quantize(trans, plane_coeffs[1], 8, order_chroma,
+        buf+plane_coeffs[0], dim);
 
     wht2d(b, trans);
-    quantize(trans, 1, 8, order, buf+26, dim);
+    quantize(trans, plane_coeffs[2], 8, order_chroma,
+        buf+plane_coeffs[0]+plane_coeffs[1], dim);
 
     cvReleaseImage(&trans);
     cvReleaseImage(&lab);
     cvReleaseImage(&l);
     cvReleaseImage(&a);
     cvReleaseImage(&b);
-    free(order);
+    free(order_luma);
+    free(order_chroma);
 
     return buf;
 }
@@ -415,10 +421,11 @@ static void test_wht()
     IplImage *src = alignedImageFrom("lena.png", 8);
     IplImage *dst = alignedImageFrom("eva.jpg", 8);
     CvSize size = cvGetSize(src);
-    int dim = 27, sz = size.width * size.height / 64;
-    int *c_dst, *c_src;
-    c_src = block_coeffs(src, dim);
-    c_dst = block_coeffs(dst, dim);
+    int sz = size.width * size.height / 64;
+    int *c_dst, *c_src, plane_coeffs[] = {16, 4, 4};
+    int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
+    c_src = block_coeffs(src, plane_coeffs);
+    c_dst = block_coeffs(dst, plane_coeffs);
     kd_tree kdt;
     cvShowImage("img", src);
     printf("building tree\n");
@@ -444,10 +451,11 @@ static void test_gck()
     IplImage *src = alignedImageFrom("lena.png", 8);
     CvSize size = cvGetSize(src);
     int w1 = size.width - 8 + 1, h1 = size.height - 8 + 1;
-    int dim = 27, sz = w1*h1;
+    int sz = w1*h1, plane_coeffs[] = {16, 4, 4};
     int *i, *c_src;
-    prop_coeffs(src, dim, &i);
-    c_src = block_coeffs(src, dim);
+    int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
+    prop_coeffs(src, plane_coeffs, &i);
+    c_src = block_coeffs(src, plane_coeffs);
     kd_tree kdt;
     memset(&kdt, 0, sizeof(kdt));
     cvShowImage("img", src);
@@ -457,7 +465,7 @@ static void test_gck()
     int errors = test_positions(&kdt, i, sz);
     printf("got positions with %d errors\n", errors);
 
-    IplImage *matched = match(&kdt, c_src, size);
+    IplImage *matched = match(&kdt, c_src, size, plane_coeffs);
     cvShowImage("matched", matched);
     cvWaitKey(0);
     kdt_free(&kdt);
@@ -475,18 +483,22 @@ static void test_gck2()
     //IplImage *src = alignedImageFrom("frames/bbb19.png", 8);
     CvSize size = cvGetSize(src);
     int w1 = size.width - 8 + 1, h1 = size.height - 8 + 1;
-    int dim = 27, sz = w1*h1, *c_dst;
-    int *i;
+    int sz = w1*h1, *c_dst;
+    int *i, plane_coeffs[] = {16, 4, 4};
+    int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     kd_tree kdt;
 
-    prop_coeffs(src, dim, &i);
-    c_dst = block_coeffs(dst, dim);
+    prop_coeffs(src, plane_coeffs, &i);
+    c_dst = block_coeffs(dst, plane_coeffs);
     memset(&kdt, 0, sizeof(kdt));
 
     kdt_new(&kdt, i, sz, dim);
-    IplImage *matched = match(&kdt, c_dst, cvGetSize(dst));
-    IplImage *matched2 = match2(&kdt, c_dst, cvGetSize(dst));
-    IplImage *matched3 = match3(&kdt, c_dst, cvGetSize(dst));
+    IplImage *matched = match(&kdt, c_dst, cvGetSize(dst),
+        plane_coeffs);
+    IplImage *matched2 = match2(&kdt, c_dst, cvGetSize(dst),
+        plane_coeffs);
+    IplImage *matched3 = match3(&kdt, c_dst, cvGetSize(dst),
+        plane_coeffs);
     cvShowImage("src", src);
     cvShowImage("matched", matched);
     cvShowImage("matched2", matched2);
@@ -632,16 +644,17 @@ static void test_complete()
     IplImage *diff3 = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     IplImage *diff2 = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     int w1 = src_size.width - 8 + 1, h1 = src_size.height - 8 + 1;
-    int dim = 27, sz = w1*h1;
+    int plane_coeffs[] = {25, 1, 1}, sz = w1*h1;
+    int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     int *i, *di;
     double t1, t2, t3, t4, t5;
     kd_tree kdt;
 
     memset(&kdt, 0, sizeof(kdt));
     t1 = get_time();
-    prop_coeffs(src, dim, &i);
+    prop_coeffs(src, plane_coeffs, &i);
     t2 = get_time();
-    prop_coeffs(dst, dim, &di);
+    prop_coeffs(dst, plane_coeffs, &di);
 
     t3 = get_time();
     kdt_new(&kdt, i, sz, dim);
