@@ -195,6 +195,7 @@ static IplImage* splat(int *coeffs, CvSize size, int *plane_coeffs)
     int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     unsigned *order_luma = build_path(plane_coeffs[0], 8);
     unsigned *order_chroma = build_path(plane_coeffs[1], 8);
+    unsigned *order_p2 = build_path(plane_coeffs[2], 8);
 
     memset(trans->imageData, 0, trans->imageSize);
     dequantize(trans, plane_coeffs[0], order_luma, 8, coeffs, dim);
@@ -204,7 +205,7 @@ static IplImage* splat(int *coeffs, CvSize size, int *plane_coeffs)
         coeffs+plane_coeffs[0], dim);
     iwht2d(trans, a);
     memset(trans->imageData, 0, trans->imageSize);
-    dequantize(trans, plane_coeffs[2], order_chroma, 8,
+    dequantize(trans, plane_coeffs[2], order_p2, 8,
         coeffs+plane_coeffs[0]+plane_coeffs[1], dim);
     iwht2d(trans, b);
 
@@ -220,6 +221,7 @@ static IplImage* splat(int *coeffs, CvSize size, int *plane_coeffs)
     cvReleaseImage(&trans);
     free(order_luma);
     free(order_chroma);
+    free(order_p2);
     return img;
 }
 
@@ -380,6 +382,7 @@ static int* block_coeffs(IplImage *img, int* plane_coeffs) {
     int *buf = malloc(sizeof(int)*sz);
     unsigned *order_luma = build_path(plane_coeffs[0], 8);
     unsigned *order_chroma = build_path(plane_coeffs[1], 8);
+    unsigned *order_p2 = build_path(plane_coeffs[2], 8);
 
     cvCvtColor(img, lab, CV_BGR2YCrCb);
     cvSplit(lab, l, a, b, NULL);
@@ -392,7 +395,7 @@ static int* block_coeffs(IplImage *img, int* plane_coeffs) {
         buf+plane_coeffs[0], dim);
 
     wht2d(b, trans);
-    quantize(trans, plane_coeffs[2], 8, order_chroma,
+    quantize(trans, plane_coeffs[2], 8, order_p2,
         buf+plane_coeffs[0]+plane_coeffs[1], dim);
 
     cvReleaseImage(&trans);
@@ -402,6 +405,7 @@ static int* block_coeffs(IplImage *img, int* plane_coeffs) {
     cvReleaseImage(&b);
     free(order_luma);
     free(order_chroma);
+    free(order_p2);
 
     return buf;
 }
