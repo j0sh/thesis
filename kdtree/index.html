@@ -1,0 +1,1646 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"  
+  "http://www.w3.org/TR/html4/loose.dtd">  
+<html > 
+<head><title></title> 
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"> 
+<meta name="generator" content="TeX4ht (http://www.cse.ohio-state.edu/~gurari/TeX4ht/)"> 
+<meta name="originator" content="TeX4ht (http://www.cse.ohio-state.edu/~gurari/TeX4ht/)"> 
+<!-- html --> 
+<meta name="src" content="kdtree.tex"> 
+<meta name="date" content="2013-06-10 14:17:00"> 
+<link rel="stylesheet" type="text/css" href="kdtree.css"> 
+</head><body 
+>
+   <h3 class="sectionHead"><span class="titlemark">1   </span> <a 
+ id="x1-10001"></a>Propagation-Assisted KD-Tree</h3>
+<!--l. 15--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.1   </span> <a 
+ id="x1-20001.1"></a>Preamble</h4>
+<!--l. 15--><p class="noindent" >This work describes a propagation-assisted kd-tree, based off the paper
+Computing Nearest-Neighbor Fields via Propagation-Assisted KD-Trees <span class="cite">[<a 
+href="#XHeKdTree">3</a>]</span>. For
+a brief overview of the technique, there is also a <a 
+href="http://research.microsoft.com/en-us/um/people/kahe/cvpr12/cvpr12nnf-poster.pdf" >poster</a> available. Code for this
+implementation can be found <a 
+href="https://github.com/j0sh/thesis/blob/master/kdtree.c" >here</a>.
+<!--l. 17--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.2   </span> <a 
+ id="x1-30001.2"></a>Introduction</h4>
+<!--l. 17--><p class="noindent" >The <a 
+href="https://en.wikipedia.org/wiki/K-d_tree" >kd-tree</a> is a type of space-partitioning binary tree where nodes have tuples of
+dimension <span 
+class="cmmi-10x-x-109">d</span>. The construction is follows that of a standard binary tree &#8211; for a
+value <span 
+class="cmmi-10x-x-109">v </span>at axis <span 
+class="cmmi-10x-x-109">a </span>(0 <span 
+class="cmsy-10x-x-109">&le; </span><span 
+class="cmmi-10x-x-109">a &#x003C; d</span>) where <span 
+class="cmmi-10x-x-109">v </span>= <span 
+class="cmmi-10x-x-109">Tuple</span>[<span 
+class="cmmi-10x-x-109">a</span>] : if <span 
+class="cmmi-10x-x-109">v </span><span 
+class="cmsy-10x-x-109">&le; </span><span 
+class="cmmi-10x-x-109">p </span>for some pivot
+<span 
+class="cmmi-10x-x-109">p </span>= <span 
+class="cmmi-10x-x-109">Node</span>-<span 
+class="cmmi-10x-x-109">tuple</span>[<span 
+class="cmmi-10x-x-109">a</span>], send <span 
+class="cmmi-10x-x-109">Tuple </span>down the left branch; otherwise <span 
+class="cmmi-10x-x-109">Tuple </span>goes right.
+The construction continues for the next axis at the next level. See Listing <a 
+href="#x1-3001r1">1<!--tex4ht:ref: TreeBuilding --></a> a
+simplified algorithm. Axes need not be sequential (eg, the choice of <span 
+class="cmmi-10x-x-109">a </span>at one level
+does not imply <span 
+class="cmmi-10x-x-109">a </span>+ 1 at the next level), rather the axis ordering is typically
+selected to maximize the balance of the tree. Axis ordering is further
+discussed in Section <a 
+href="#x1-60001.5">1.5<!--tex4ht:ref: coeffselection --></a>. The selection of the pivot <span 
+class="cmmi-10x-x-109">p </span>(and by extension, the
+selection of the node contents <span 
+class="cmmi-10x-x-109">Node</span>-<span 
+class="cmmi-10x-x-109">tuple</span>) is also extremely important to
+maintain balance and make tree-building performant. Pivot selection is
+discussed in Section <a 
+href="#x1-70001.6">1.6<!--tex4ht:ref: pivotselection --></a>. For our purposes, we also follow the lead of <span class="cite">[<a 
+href="#XHeKdTree">3</a>]</span> and
+terminate each leaf with at most <span 
+class="cmmi-10x-x-109">m </span>= 8 tuples (<span 
+class="cmmi-10x-x-109">m </span>is configurable at
+compile-time).
+   <!--l. 19-->
+<a 
+ id="x1-3001r1"></a>
+<a 
+ id="x1-3002"></a>
+   <div class="lstlisting" id="listing-1"><span class="label"><a 
+ id="x1-3003r1"></a></span><span 
+class="cmtt-10x-x-109">node</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">new_node</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">**</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuples</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">nb_tuples</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">depth</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3004r2"></a></span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3005r3"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">node</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">make_node</span><span 
+class="cmtt-10x-x-109">();</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3006r4"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">if</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">nb_tuples</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">m</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3007r5"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">node</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">tuples</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuples</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3008r6"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">node</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">nb_tuples</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">nb_tuples</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3009r7"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">return</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">node</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3010r8"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">}</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3011r9"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">axis</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">depth</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">%</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">d</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3012r10"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">median</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">find_median</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">tuples</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">nb_tuples</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">axis</span><span 
+class="cmtt-10x-x-109">);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3013r11"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">pivot</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuples</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">median</span><span 
+class="cmtt-10x-x-109">][</span><span 
+class="cmtt-10x-x-109">axis</span><span 
+class="cmtt-10x-x-109">];</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3014r12"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">tuples</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuples</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">+</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">median</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3015r13"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">left</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">new_node</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">tuples</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">nb_points</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">median</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">depth</span><span 
+class="cmtt-10x-x-109">+1);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3016r14"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">right</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">new_node</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">tuples</span><span 
+class="cmtt-10x-x-109">+</span><span 
+class="cmtt-10x-x-109">median</span><span 
+class="cmtt-10x-x-109">+1,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">nb_tuples</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">median</span><span 
+class="cmtt-10x-x-109">-1,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">depth</span><span 
+class="cmtt-10x-x-109">+1);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3017r15"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">return</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3018r16"></a></span><span 
+class="cmtt-10x-x-109">}</span>
+   
+<br /> <div class="caption" 
+><span class="id">Algorithm&#x00A0;1: </span><span  
+class="content">Simplified tree-building. Note the find_median operation is
+destructive; it partitions tuples around the median tuple, at the given axis.</span></div><!--tex4ht:label?: x1-30001 -->
+   </div>
+<!--l. 38--><p class="indent" >   Querying is likewise similar: at each level, the query and the node&#8217;s
+tuple are compared at the appropriate axis, and branching goes from
+there.
+   <!--l. 40-->
+                                                                     
+
+                                                                     
+<a 
+ id="x1-3019r2"></a>
+<a 
+ id="x1-3020"></a>
+   <div class="lstlisting" id="listing-2"><span class="label"><a 
+ id="x1-3021r1"></a></span><span 
+class="cmtt-10x-x-109">node</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">query_node</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">node</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">query</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">depth</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3022r2"></a></span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3023r3"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">axis</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">depth</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">%</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">d</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3024r4"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">if</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(!</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">left</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&amp;&amp;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">!</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">right</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">return</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3025r5"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">if</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">query</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">axis</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">==</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">pivot</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&amp;&amp;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuple_matches</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">tuples</span><span 
+class="cmtt-10x-x-109">[0],</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">query</span><span 
+class="cmtt-10x-x-109">))</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3026r6"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">return</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3027r7"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">if</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">left</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&amp;&amp;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">query</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">axis</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">pivot</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3028r8"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">query_node</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">left</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">k</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">query</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">depth</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">+</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3029r9"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">if</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">right</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&amp;&amp;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">query</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">axis</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003E;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">pivot</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3030r10"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">query_node</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">n</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">right</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">k</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">query</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">depth</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">+</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-3031r11"></a></span><span 
+class="cmtt-10x-x-109">}</span>
+   
+<br /> <div class="caption" 
+><span class="id">Algorithm&#x00A0;2: </span><span  
+class="content">Simplified search.</span></div><!--tex4ht:label?: x1-30001 -->
+   </div>
+<!--l. 54--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.3   </span> <a 
+ id="x1-40001.3"></a>Differences from original Propagation-Assisted KD-Tree</h4>
+<!--l. 54--><p class="noindent" >While this work is very similar to <span class="cite">[<a 
+href="#XHeKdTree">3</a>]</span>, there are several differences:
+     <ul class="itemize1">
+     <li class="itemize">The tree is 16-dimensional (<span 
+class="cmmi-10x-x-109">d </span>= 16) composed of tuples constructed
+     from the Walsh-Hadamard (WHT) transform in RGB space, truncated
+     to  2-9-5  coefficients,  rather  than  16-4-4  in  YUV  space  as  was
+     done  in  the  original  paper.  Changing  the  colorspace  and  reducing
+     dimensionality  decreases  error  by  4%  and  runtime  by  23%  on  the
+     VidPairs data set <span class="cite">[<a 
+href="#XVidPairs">5</a>]</span>. Section <a 
+href="#x1-80001.7">1.7<!--tex4ht:ref: colorspaceselection --></a> further discusses the colorspace and
+     dimensionality selection.
+     </li>
+     <li class="itemize">Given a target patch <span 
+class="cmmi-10x-x-109">P</span><sub><span 
+class="cmmi-8">B</span></sub>(<span 
+class="cmmi-10x-x-109">x,y</span>), rather than than propagating <span 
+class="cmmi-10x-x-109">P</span><sub><span 
+class="cmmi-8">A</span></sub>(<span 
+class="cmmi-10x-x-109">x,y</span>)
+     from the left and top adjacencies previously found at <span 
+class="cmmi-10x-x-109">P</span><sub><span 
+class="cmmi-8">A</span></sub>(<span 
+class="cmmi-10x-x-109">x </span><span 
+class="cmsy-10x-x-109">&minus; </span>1<span 
+class="cmmi-10x-x-109">,y</span>)
+     and <span 
+class="cmmi-10x-x-109">P</span><sub><span 
+class="cmmi-8">A</span></sub>(<span 
+class="cmmi-10x-x-109">x,y </span><span 
+class="cmsy-10x-x-109">&minus; </span>1) instead directly propagate the best <span 
+class="cmmi-10x-x-109">k </span>matches from
+     each  location  at  <span 
+class="cmmi-10x-x-109">P</span><sub><span 
+class="cmmi-8">A</span></sub>(<span 
+class="cmmi-10x-x-109">x </span><span 
+class="cmsy-10x-x-109">&minus; </span>1<span 
+class="cmmi-10x-x-109">,y</span>)  and  <span 
+class="cmmi-10x-x-109">P</span><sub><span 
+class="cmmi-8">A</span></sub>(<span 
+class="cmmi-10x-x-109">x,y </span><span 
+class="cmsy-10x-x-109">&minus; </span>1)  (rather  than  the
+     adjacencies) since this seems to lead to much more accurate results.
+     This may be partly because all comparisons are done in WHT space,
+     which is not completely reflective of the true RGB distance between
+     two  patches.  <span class="cite">[<a 
+href="#XHeKdTree">3</a>]</span>  proposes  re-ranking  to  address  this  problem,  but
+     re-ranking was not implemented here. It is also possible there is an
+     error  in  this  implementation  leading  to  degraded  results  with  the
+     original algorithm.</li></ul>
+<!--l. 61--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.4   </span> <a 
+ id="x1-50001.4"></a>Test Setup</h4>
+<!--l. 61--><p class="noindent" >Testing was done on 126 pairs of JPEGs of the VidPairs data set. Each pair of
+images is taken publicly available movie trailers, several frames apart. For each
+pixel in the destination image, patches from the source image are used to
+determine the nearest neighbor &#8211; the best pixel to use for reconstruction. The
+accuracy of the result is computed by <span 
+class="cmex-10">&sum;</span>
+  <span 
+class="cmsy-10x-x-109">|</span><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">r</span></sub> <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">gt</span></sub><span 
+class="cmsy-10x-x-109">|</span>: taking the SAD of the
+                                                                     
+
+                                                                     
+reconstructed image and the ground-truth best match between the two
+pairs.
+   <!--l. 63-->
+<a 
+ id="x1-5001r3"></a>
+<a 
+ id="x1-5002"></a>
+   <div class="lstlisting" id="listing-3"><span class="label"><a 
+ id="x1-5003r1"></a></span><span 
+class="cmtt-10x-x-109">image</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">reconstruct_image</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">image</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">src</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">image</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5004r2"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">image</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">rec</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">new_image</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">dst</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">width</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">height</span><span 
+class="cmtt-10x-x-109">);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5005r3"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">for</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst_y</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst_y</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">height</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst_y</span><span 
+class="cmtt-10x-x-109">++)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5006r4"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">for</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst_x</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst_x</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">width</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst_x</span><span 
+class="cmtt-10x-x-109">++)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5007r5"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">src_x</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">src_y</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5008r6"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuple</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">patch</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">get_patch</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">dst</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst_x</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">dst_y</span><span 
+class="cmtt-10x-x-109">);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5009r7"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuple</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">match</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">query</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">src</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">patch</span><span 
+class="cmtt-10x-x-109">);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5010r8"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">get_coords</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">src</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">patch</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">\&amp;</span><span 
+class="cmtt-10x-x-109">src_x</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">\&amp;</span><span 
+class="cmtt-10x-x-109">src_y</span><span 
+class="cmtt-10x-x-109">);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5011r9"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">rec</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">dst_y</span><span 
+class="cmtt-10x-x-109">][</span><span 
+class="cmtt-10x-x-109">dst_x</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">src</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">src_y</span><span 
+class="cmtt-10x-x-109">][</span><span 
+class="cmtt-10x-x-109">src_x</span><span 
+class="cmtt-10x-x-109">];</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5012r10"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">}</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5013r11"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">}</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5014r12"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">return</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">rec</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-5015r13"></a></span><span 
+class="cmtt-10x-x-109">}</span>
+   
+<br /> <div class="caption" 
+><span class="id">Algorithm&#x00A0;3: </span><span  
+class="content">Simplified test procedure</span></div><!--tex4ht:label?: x1-50001 -->
+   </div>
+<!--l. 79--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.5   </span> <a 
+ id="x1-60001.5"></a>Coefficient Selection</h4>
+<!--l. 79--><p class="noindent" >After the WHT operation, the coefficients are in planar order; this must be
+transformed to an interleaved order (eg, <span 
+class="cmmi-10x-x-109">AAABBBCCC </span><span 
+class="cmsy-10x-x-109">&rarr; </span><span 
+class="cmmi-10x-x-109">ABCABCABC</span>)
+before insertion. The 2-D WHT coefficients are selected in approximately
+sequency (frequency-increasing) order to take advantage of WHT energy
+compaction in the first few frequencies. This resembles the entropy-coding stage
+for image and video codecs where transformed coefficients are selected in a
+zig-zag order (see Figure 1).
+<!--l. 81--><p class="indent" >   After interleaving, the axis ordering for insertion from the <span 
+class="cmmi-10x-x-109">d </span>coefficients needs
+to be determined. To reduce run-time, <span class="cite">[<a 
+href="#XHeKdTree">3</a>]</span> randomly samples tuples and generates
+an ordering going from the dimension with the largest spread (difference between
+min/max values) to the lowest. This random sampling is not implemented here;
+instead a full traversal is done. While sampling is simple enough to implement,
+tree balance checks haven&#8217;t been implemented, which are necessary in order to
+verify the sampling. In fact, sampling might be entirely avoidable by simply
+visiting the coefficients in sequency order, which would further reduce
+tree-building time. However, this hypothesis still needs to be tested &#8211; again, via
+tree balance checking.
+<!--l. 83--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-60011"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 84--><p class="noindent" ><img 
+src="images/ordering.png" alt="PIC"  
+width="215.00105pt" height="215.00485pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;1: </span><span  
+class="content">W-H basis vectors and coefficient selection after projection. Note
+the selections in order of increasing frequency. Frequency can be counted as
+the number of zero crossings from -1 to 1 (or from black to white)</span></div><!--tex4ht:label?: x1-60011 -->
+                                                                     
+
+                                                                     
+<!--l. 86--><p class="indent" >   </div><hr class="endfigure">
+   <h4 class="subsectionHead"><span class="titlemark">1.6   </span> <a 
+ id="x1-70001.6"></a>Pivot Selection</h4>
+<!--l. 88--><p class="noindent" >Quickselect is the linear-time median selection algorithm used to find an
+appropriate pivot value for each inner node as the tree is built. First an initial
+guess at the median is made (using the median-of-3 method <span class="cite">[<a 
+href="#XCormenAlgos">1</a>]</span>, and partitions
+elements around that guess, refining the guess at each iteration until convergence.
+A non-recursive implementation from <span class="cite">[<a 
+href="#XDevillardMedian">2</a>]</span> is used, modified to accommodate
+<span 
+class="cmmi-10x-x-109">k</span>-dimensional tuples and to partition tuples around a given axis. Another
+convenient property of the quickselect algorithm is that it approximately sorta
+numbers around the median, wth values growing closer to the median towards
+the middle. This helps amortize the cost of repeated sub-selections, which
+occur on each branch as the tree is built. There is a drawback with the
+quickselect algorithm &#8211; while it will find the median of an unordered list of
+numbers, if the median is duplicated in the list, there is no guarantee
+the median will be pivoted around itself. Hence the median could be
+present in both partitions, leading to much lower query accuracy (and
+makes it impossible for an image to query itself). One solution (as was
+implemented here) is to take a second pass over the data and pivot around
+the median; this is the same algorithm as described in <span class="cite">[<a 
+href="#XCormenAlgos">1</a>]</span> as the Hoare
+Partition. Quicksort suffers from a similar problem as described in <span class="cite">[<a 
+href="#XSedgewickAlgos">6</a>]</span>,
+which can be mitigated by using a two-pivot variant. Something similar
+could be investigated here, which would avoid a second pass over the
+data.
+<!--l. 90--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.7   </span> <a 
+ id="x1-80001.7"></a>Colorspace and Dimensionality Selection</h4>
+<!--l. 90--><p class="noindent" >Proper selection of colorspace and coefficients is important for query accuracy
+and time spent in tree-building. RGB was found to be faster, more accurate and
+require fewer coefficients. The question is &#8211; why? Non-RGB colorspaces are
+common for for image processing operations, including nearest-neighbor search
+(<span class="cite">[<a 
+href="#XHeKdTree">3</a>]</span>, <span class="cite">[<a 
+href="#XCSH">4</a>]</span>). These colorspaces typically model luminosity separately from the
+color components (chrominance). Looking at Figure <a 
+href="#x1-80073">3<!--tex4ht:ref: chromacmp --></a>, luminosity has
+a significant impact on perceptual quality, even with minimal chroma
+information. Since high-frequency coefficients after the WHT tend towards
+zero, extra low-frequency chroma terms significantly improve the quality
+of matching in addition to reducing run-time slightly (Figure <a 
+href="#x1-80011">1<!--tex4ht:ref: runtimetable --></a>). RGB
+preserves the original colorspace, with information more equally spread
+among the its channels, leading to more consistent fluctuations in the
+transformed signal. An interesting note is the optimal set of coefficients
+for RGB (2-9-5) mirrors the ratio commonly used in RGB to grayscale
+                                                                     
+
+                                                                     
+conversion.
+   <div class="table">
+                                                                     
+
+                                                                     
+<!--l. 93--><p class="indent" >   <a 
+ id="x1-80011"></a><hr class="float"><div class="float" 
+>
+                                                                     
+
+                                                                     
+<div class="tabular"> <table id="TBL-1" class="tabular" 
+cellspacing="0" cellpadding="0" rules="groups" 
+><colgroup id="TBL-1-1g"><col 
+id="TBL-1-1"></colgroup><colgroup id="TBL-1-2g"><col 
+id="TBL-1-2"></colgroup><colgroup id="TBL-1-3g"><col 
+id="TBL-1-3"></colgroup><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-1-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-1"  
+class="td11">Configuration</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-2"  
+class="td11">% of PM</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-3"  
+class="td11">Time (ms)</td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-2-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-1"  
+class="td11">HSV-4-4-16    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-2"  
+class="td11">1.270     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-3"  
+class="td11">4101        </td></tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-3-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-1"  
+class="td11">Yuv-25-1-1 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-2"  
+class="td11">0.984 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-3"  
+class="td11">4939</td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-4-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-1"  
+class="td11">Lab-19-4-4     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-2"  
+class="td11">0.995     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-3"  
+class="td11">4990        </td></tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-5-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-1"  
+class="td11">Lab-16-4-4 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-2"  
+class="td11">0.996 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-3"  
+class="td11">4569</td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-6-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-1"  
+class="td11">Lab-25-1-1     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-2"  
+class="td11">1.001     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-3"  
+class="td11">5301        </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-7-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-1"  
+class="td11">Yuv-19-4-4     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-2"  
+class="td11">0.979     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-3"  
+class="td11">4812        </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-8-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-1"  
+class="td11">Yuv-16-4-4     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-2"  
+class="td11">0.980     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-3"  
+class="td11">4435        </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-9-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-1"  
+class="td11">Yuv-10-3-3     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-2"  
+class="td11">0.981     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-3"  
+class="td11">3505        </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-10-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-10-1"  
+class="td11">RGB-8-8-8     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-10-2"  
+class="td11">0.953     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-10-3"  
+class="td11">4268        </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-11-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-11-1"  
+class="td11">RGB-5-9-2     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-11-2"  
+class="td11">0.949     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-11-3"  
+class="td11">3399        </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-12-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-12-1"  
+class="td11">PatchMatch   </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-12-2"  
+class="td11">1.000     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-12-3"  
+class="td11">16544      </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-13-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-13-1"  
+class="td11">            </td></tr></table></div>
+<br /> <div class="caption" 
+><span class="id">Table&#x00A0;1: </span><span  
+class="content">Average runtimes for VidPairs, as compared to PatchMatch. The
+configuration scheme first names the colorspace followed by the number of
+coefficients allocated to each color channel.</span></div><!--tex4ht:label?: x1-80011 -->
+                                                                     
+
+                                                                     
+   </div><hr class="endfloat" />
+   </div>
+<!--l. 112--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-80022"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 113--><p class="noindent" ><img 
+src="images/timeaccuracy.png" alt="PIC"  
+width="607.26874pt" height="341.275pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;2:  </span><span  
+class="content">Average  results  for  colorspace/coefficient  combinations  with
+VidPairs. HSV, as an outlier, is not graphed</span></div><!--tex4ht:label?: x1-80022 -->
+                                                                     
+
+                                                                     
+<!--l. 116--><p class="indent" >   </div><hr class="endfigure">
+<!--l. 118--><p class="indent" >   To emphasize how perceptually compressed non-RGB color spaces are: Figure
+<a 
+href="#x1-80073">3<!--tex4ht:ref: chromacmp --></a> compares a portion of the Lena image by doing a 8x8 non-overlapping WHT,
+quantizing each color channel to the specified number of coefficients (using the
+method of <a 
+href="#x1-60001.5">1.5<!--tex4ht:ref: coeffselection --></a>), then taking the inverse WHT. Figure <a 
+href="#x1-8003r1">3a<!--tex4ht:ref: eye:14:1:1 --></a> retains the most detail
+with just one coefficient for UV. The only visible degradation compared to Figure
+<a 
+href="#x1-8004r2">3b<!--tex4ht:ref: eye:10:3:3 --></a> is some minor chromatic aberration along the diagonal edge, and a
+slightly duller color overall. On the other hand, the 24 coefficients of <a 
+href="#x1-8005r3">3c<!--tex4ht:ref: eye:8:8:8 --></a>
+noticeably degrade the image &#8211; even though information is distributed
+more evenly among RGB color channels, which should minimize the
+impact of quantizing any one channel. This is even more apparent in the
+16-coefficient case of Figure <a 
+href="#x1-8006r4">3d<!--tex4ht:ref: eye:2:9:5 --></a>. Strikingly, while Figure <a 
+href="#x1-80073">3<!--tex4ht:ref: chromacmp --></a> is arranged in order of
+decreasing visual quality, reconstruction quality is increasing, with <a 
+href="#x1-8006r4">3d<!--tex4ht:ref: eye:2:9:5 --></a>
+providing by far the best parameterization for kd-tree matching (see Table
+<a 
+href="#x1-80011">1<!--tex4ht:ref: runtimetable --></a>).
+<!--l. 120--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-80073"></a>
+                                                                     
+
+                                                                     
+<!--l. 122--><p class="noindent" ><!--l. 124--><p class="noindent" ><img 
+src="images/chromatests/eye-14-1-1.png" alt="PIC"  
+width="108.0011pt" height="108.0031pt" > <a 
+ id="x1-8003r1"></a>
+<span 
+class="cmr-10">YUV-14-1-1</span>
+
+<!--l. 130--><p class="noindent" ><img 
+src="images/chromatests/eye-10-3-3.png" alt="PIC"  
+width="108.0011pt" height="108.0031pt" > <a 
+ id="x1-8004r2"></a>
+<span 
+class="cmr-10">YUV-10-3-3</span>
+
+<!--l. 136--><p class="noindent" ><img 
+src="images/chromatests/eye-8-8-8.png" alt="PIC"  
+width="108.0011pt" height="108.0031pt" > <a 
+ id="x1-8005r3"></a>
+<span 
+class="cmr-10">RGB-8-8-8</span>
+
+<!--l. 142--><p class="noindent" ><img 
+src="images/chromatests/eye-2-9-5.png" alt="PIC"  
+width="108.0011pt" height="108.0031pt" > <a 
+ id="x1-8006r4"></a>
+<span 
+class="cmr-10">RGB-2-9-5</span>
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;3:  </span><span  
+class="content">Visual  comparison  of  quantization  using  various  parameters,
+scaled 250%</span></div><!--tex4ht:label?: x1-80073 -->
+                                                                     
+
+                                                                     
+<!--l. 148--><p class="indent" >   </div><hr class="endfigure">
+   <h4 class="subsectionHead"><span class="titlemark">1.8   </span> <a 
+ id="x1-90001.8"></a>PatchMatch Comparision</h4>
+<!--l. 150--><p class="noindent" >Note in Figure <a 
+href="#x1-90014">4<!--tex4ht:ref: kdpmvidpairs --></a> there are two distinct groups of images as observed by the
+running time; for the kd-tree, there is a group around 3000ms and another
+around 4500ms, while PatchMatch has groups around 14000ms and 20000ms.
+This is due to variations in the data set; a few pairs of images in VidPairs
+are 1920x800 while most are 1920x1080, effectively a 35% increase in
+pixel count. Figure <a 
+href="#x1-90065">5<!--tex4ht:ref: kdpmcmp --></a> shows the visual results of reconstruction for the
+propagation-assisted kd-tree, PatchMatch, and the ground truth best match.
+Both Figures <a 
+href="#x1-9002r1">5a<!--tex4ht:ref: kdpmcmp:kdtree --></a> and <a 
+href="#x1-9003r2">5b<!--tex4ht:ref: kdpmcmp:pm --></a> exhibit characteristic ringing around the edges, although
+PatchMatch&#8217;s is more pronounced due to how it propagates adjacent
+pixels. Since this implementation of the kd-tree propagates <span 
+class="cmmi-10x-x-109">P</span><sub><span 
+class="cmmi-8">A</span></sub>(<span 
+class="cmmi-10x-x-109">x </span><span 
+class="cmsy-10x-x-109">&minus; </span>1<span 
+class="cmmi-10x-x-109">,y</span>)
+(or <span 
+class="cmmi-10x-x-109">P</span><sub><span 
+class="cmmi-8">A</span></sub>(<span 
+class="cmmi-10x-x-109">x,y </span><span 
+class="cmsy-10x-x-109">&minus; </span>1)) rather than <span 
+class="cmmi-10x-x-109">P</span><sub><span 
+class="cmmi-8">A</span></sub>(<span 
+class="cmmi-10x-x-109">x,y</span>), there is visible banding around
+areas that are both uniform in color, and difficult to match (usually due
+to few approximations of that color in the source image). This occurs
+due to <span 
+class="cmmi-10x-x-109">P</span><sub><span 
+class="cmmi-8">B</span></sub>(<span 
+class="cmmi-10x-x-109">x,y</span>) &#8217;borrowing&#8217; patches from previously matched neighbors.
+This is plainly visible in the background, where PatchMatch also has
+difficulty.
+<!--l. 152--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-90014"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 153--><p class="noindent" ><img 
+src="images/kd-pm-vidpairs.png" alt="PIC"  
+width="450.00935pt" height="300.00165pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;4: </span><span  
+class="content">PatchMatch comparison for VidPairs tests</span></div><!--tex4ht:label?: x1-90014 -->
+                                                                     
+
+                                                                     
+<!--l. 156--><p class="indent" >   </div><hr class="endfigure">
+<!--l. 158--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-90065"></a>
+                                                                     
+
+                                                                     
+<!--l. 159--><p class="noindent" ><!--l. 161--><p class="noindent" ><img 
+src="images/kdpmcmp/kdtree.png" alt="PIC"  
+width="108.0011pt" height="108.00084pt" > <a 
+ id="x1-9002r1"></a>
+<span 
+class="cmr-10">KD-Tree</span>
+
+<!--l. 167--><p class="noindent" ><img 
+src="images/kdpmcmp/pm.png" alt="PIC"  
+width="108.0011pt" height="108.00084pt" > <a 
+ id="x1-9003r2"></a>
+<span 
+class="cmr-10">PatchMatch</span>
+
+<!--l. 173--><p class="noindent" ><img 
+src="images/kdpmcmp/gt.png" alt="PIC"  
+width="108.0011pt" height="108.00084pt" > <a 
+ id="x1-9004r3"></a>
+<span 
+class="cmr-10">Ground Truth</span>
+
+<!--l. 179--><p class="noindent" ><img 
+src="images/kdpmcmp/orig.png" alt="PIC"  
+width="108.0011pt" height="108.00084pt" > <a 
+ id="x1-9005r4"></a>
+<span 
+class="cmr-10">Original</span>
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;5: </span><span  
+class="content">Visual comparison of PM, KD-Tree, Ground Truth and original</span></div><!--tex4ht:label?: x1-90065 -->
+                                                                     
+
+                                                                     
+<!--l. 185--><p class="indent" >   </div><hr class="endfigure">
+   <h4 class="subsectionHead"><span class="titlemark">1.9   </span> <a 
+ id="x1-100001.9"></a>Implementation Notes</h4>
+<!--l. 187--><p class="noindent" >Tuples are stored in memory in raster order, and a separate array of
+pointers is built that points to the beginning of each tuple. The pointers are
+partitioned during tree-building; pointer swapping is much faster than
+swapping blocks of memory. Moreover, this method reduces the cache
+footprint of a single node (which only has to maintain pointers to its
+<span 
+class="cmmi-10x-x-109">m </span>tuples). This also has the result of speeding up tree traversal (and
+querying), although the final determination of the best candidate is a
+bit slower due to the need to access a different region of memory for
+each tuple in a leaf. This indirction reduces tree-building time by up to
+18%.
+<!--l. 189--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-100016"></a><a 
+ id="x1-100008"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 190--><p class="noindent" ><img 
+src="images/kdtreepointers.png" alt="PIC"  
+width="235.00302pt" height="162.00172pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;6: </span><span  
+class="content">Layout of tuples in memory (<span 
+class="cmmi-10x-x-109">d </span>= 2, <span 
+class="cmmi-10x-x-109">m </span>= 3), with node values
+pointing to tuple indices.</span></div><!--tex4ht:label?: x1-100016 -->
+                                                                     
+
+                                                                     
+<!--l. 192--><p class="indent" >   </div><hr class="endfigure">
+<!--l. 194--><p class="indent" >   While indirection makes queries against the tree a bit slower (at the final
+step; when finding the exact best match among <span 
+class="cmmi-10x-x-109">m </span>candidates), its impact during
+propagation is minimized by using previously found top and left tuples as a
+&#8221;guide&#8221; rather than checking against the <span 
+class="cmmi-10x-x-109">m </span>tuples in the node containing them.
+Hence, only a single row of pointers is needed as a history to track previous
+matches, with the current position in the history (position <span 
+class="cmmi-10x-x-109">x</span>) indicating the top
+(prior to being overwritten by the best match for the current query), and the left
+at position <span 
+class="cmmi-10x-x-109">x </span><span 
+class="cmsy-10x-x-109">&minus; </span>1.
+<!--l. 196--><p class="indent" >   By storing a pointer to the beginning of the tuple array, the exact coordinates
+of a tuple in the source image can be calculated given its offset from the
+beginning of all tuples. This can be given by: <!--l. 197-->
+<a 
+ id="x1-10002r4"></a>
+<a 
+ id="x1-10003"></a>
+   <div class="lstlisting" id="listing-4"><span class="label"><a 
+ id="x1-10004r1"></a></span><span 
+class="cmtt-10x-x-109">coords</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">find_xy</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">tuple</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">tuple_start</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-10005r2"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">w</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">image_width</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">k</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-10006r3"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">offset</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuple</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuple_start</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">//</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuple</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">and</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tuple_start</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">are</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">pointers</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-10007r4"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">x</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">offset</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">%</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">w</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">//</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">modulus</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">operation</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-10008r5"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">y</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">offset</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">/</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">w</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">//</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">rounded</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">down</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">to</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">nearest</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">integer</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-10009r6"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">return</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">make_coordinates</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">x</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">y</span><span 
+class="cmtt-10x-x-109">);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-10010r7"></a></span><span 
+class="cmtt-10x-x-109">}</span>
+   
+<br /> <div class="caption" 
+><span class="id">Algorithm&#x00A0;4: </span><span  
+class="content">Finding x, y coordinates given tuple address</span></div><!--tex4ht:label?: x1-100001 -->
+   </div>
+<!--l. 207--><p class="indent" >   Calculating the original (<span 
+class="cmmi-10x-x-109">x,y</span>) coordinates of the tuple is primarily
+useful for determining its location in the source image. This information
+is used to reconstruct the target image using the pixel value at (<span 
+class="cmmi-10x-x-109">x,y</span>).
+Internally, a map also exists that points to the containing node for each (<span 
+class="cmmi-10x-x-109">x,y</span>)
+position. The map is assigned during tree-building, and can be used as
+an index into the tree (or node) during propagation, but is currently
+unused.
+<!--l. 209--><p class="indent" >   Since GCK zero-pads data, we only use patches that fall within the image; so
+we end up with (width - 8 + 1)*(height - 8 + 1) patches. This leads to
+reconstruction artifacts along bottom-right borders, which are ignored during
+error calculation.
+   <h3 class="likesectionHead"><a 
+ id="x1-110001.9"></a>References</h3>
+<!--l. 1--><p class="noindent" >
+   <div class="thebibliography">
+   <p class="bibitem" ><span class="biblabel">
+ [1]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XCormenAlgos"></a>Thomas&#x00A0;H.   Cormen,   Clifford   Stein,   Ronald&#x00A0;L.   Rivest,   and
+   Charles&#x00A0;E. Leiserson.  <span 
+class="cmti-10x-x-109">Introduction to Algorithms</span>.  McGraw-Hill Higher
+   Education, 2nd edition, 2001.
+   </p>
+                                                                     
+
+                                                                     
+   <p class="bibitem" ><span class="biblabel">
+ [2]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XDevillardMedian"></a>Nicolas Devillard. Fast Median Search: an ANSI C Implementation.
+   <a 
+href="http://ndevilla.free.fr/median/median/index.html" class="url" ><span 
+class="cmtt-10x-x-109">http://ndevilla.free.fr/median/median/index.html</span></a>, July 1998.
+   </p>
+   <p class="bibitem" ><span class="biblabel">
+ [3]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XHeKdTree"></a>Kaiming He and Jian Sun.  Computing nearest-neighbor fields via
+   propagation-assisted kd-trees. In <span 
+class="cmti-10x-x-109">CVPR</span>, pages 111&#8211;118. IEEE, 2012.
+   </p>
+   <p class="bibitem" ><span class="biblabel">
+ [4]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XCSH"></a>Simon  Korman  and  Shai  Avidan.    Coherency  sensitive  hashing.
+   In <span 
+class="cmti-10x-x-109">Computer Vision (ICCV), 2011 IEEE International Conference on</span>,
+   pages 1607&#8211;1614, November 2011.
+   </p>
+   <p class="bibitem" ><span class="biblabel">
+ [5]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XVidPairs"></a>Simon   Korman   and   Shai   Avidan.        VidPairs   data   set.
+   <a 
+href="http://www.eng.tau.ac.il/~simonk/CSH/" class="url" ><span 
+class="cmtt-10x-x-109">http://www.eng.tau.ac.il/</span><span 
+class="cmtt-10x-x-109">~</span><span 
+class="cmtt-10x-x-109">simonk/CSH/</span></a>, November 2011.
+   </p>
+   <p class="bibitem" ><span class="biblabel">
+ [6]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XSedgewickAlgos"></a>Robert  Sedgewick  and  Kevin  Wayne.    <span 
+class="cmti-10x-x-109">Algorithms,  4th  Edition</span>.
+   Addison-Wesley, 2011.
+</p>
+   </div>
+    
+</body></html> 
+
+                                                                     
+
+
