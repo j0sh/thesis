@@ -83,6 +83,7 @@ static void swap2(int *scores, int *index)
 static inline void check_guide(kd_tree *t, int *coeffs, int off,
     int *scores, int *pos)
 {
+    if (t->start + off >= t->end) return;
     int *points = t->start + off;
     int attempt = patch_score(coeffs, points, t->k);
     if (attempt < scores[0]) {
