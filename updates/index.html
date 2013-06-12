@@ -5,34 +5,25 @@
 <body>
 <h1>Thesis Progress Log</h1>
 <div>
-<p>Tried out ccv's implementation[1] of the TLD tracker[2]. Performance is disappointing at ~350ms/frame for a 320x240 video. Something must be wrong, here is the oprofile output:</p>
-<code style="background:lightgray;">
-CPU: Intel Sandy Bridge microarchitecture, speed 2.701e+06 MHz (estimated)<br/>
-Counted CPU_CLK_UNHALTED events (Clock cycles when not halted) with a unit mask of 0x00 (No unit mask) count 100000<br/>
-samples  %        image name               symbol name<br/>
-716413   57.1342  a.out                    ccv_ferns_feature<br/>
-284652   22.7011  a.out                    ccv_perspective_transform<br/>
-120659    9.6226  a.out                    ccv_ferns_predict<br/>
-35117     2.8006  a.out                    ccv_blur<br/>
-19713     1.5721  a.out                    _ccv_tld_box_variance<br/>
-19391     1.5464  no-vmlinux               /no-vmlinux<br/>
-7107      0.5668  a.out                    ccv_optical_flow_lucas_kanade<br/>
-5656      0.4511  a.out                    ccv_sat<br/>
-5004      0.3991  a.out                    _ccv_resample_area_8u<br/>
-4267      0.3403  a.out                    ccv_sobel<br/>
-3892      0.3104  a.out                    _ccv_tld_long_term_detect
-</code>
-<p>ccv uses random ferns (semi-naive bayes classifiers) as a detector and updating those is slow, but I haven't yet identified the root of the issue. Filed a <a href="https://github.com/liuliu/ccv/issues/49">bug report</a> anyway. Relevant commit: <a href="https://github.com/j0sh/thesis/commit/afc6e1ad37b34dcea5bf1f22524a2c2097fe1b39">afc6e1a</a>
+<p>C implementation of <a href="http://research.microsoft.com/en-us/um/people/kahe/publications/cvpr12nnf.pdf">Propagation-Assisted KD-Tree</a> mostly complete and benchmarked. Code available for: <a href="https://github.com/j0sh/thesis/blob/master/kdtree.c">kd-tree</a> and <a href="https://github.com/j0sh/thesis/blob/master/prop.c">propagation</a>. Preliminary <a href="../kdtree">writeup</a> available.
 </p>
-<p>Josh Allmann 03 December 2012</p>
+<p>Josh Allmann 29 May 2013</p>
 </div>
 <hr />
 <div>
-<p>Tested x264's per-macroblock quantization offsets with a circle located at the center of the image. Macroblocks outside the circle have a high offset; macroblocks within the circle do not have any extra offsets.</p>
-<img src="bbb-550.jpg" />
-<p>Frame 550 of Big Buck Bunny, with custom quantization offsets (left), and without (right). Both are being encoded with the same target bitrate. The quantization offset was set artificially high (+100) and the target bitrate artificially low (25kbps) in order to exaggerate these effects. Note that macroblocks can still generally refer to others above and to the left, so the bottom-quarter of the quantized image is still being reconstructed as an area with nearly zero difference from the reference.</p>
-<p>Conducted as part of ongoing work to tune video compression for chat and conferencing. Relevant commit: <a href="https://github.com/j0sh/thesis/commit/526423b6e8f05f2f950a1c8aee2863d335df2c1d">526423b6</a></p>
-<p>Josh Allmann 24 September 2012</p>
+<p><a href="https://gist.github.com/j0sh/5366547">C implementation</a> of the <a href="http://cs.haifa.ac.il/~hagit/papers/PAMI07-GrayCodeKernels.pdf">Gray Code Filter Kernels</a> paper is now available. Preliminary <a href="../gck">writeup</a> available.
+<p>Josh Allmann 11 April 2013</p>
+</div>
+<hr />
+<div>
+<p>Proposal approved. Abstract:</p>
+<code>A new type of background subtraction algorithm is proposed. A
+patch-based approximate nearest-neighbor (ANN) image correspon-
+dence algorithm can be used to handle background segmentation in
+video, even with translational camera motion. A single-image fore-
+ground detection algorithm, also based off the same ANN data struc-
+ture, can be used for immediate background initialization, and to avoid mis-labeling stationary foreground objects.</code>
+<p>Josh Allmann 07 March 2013</p>
 </div>
 </body>
 </html>
