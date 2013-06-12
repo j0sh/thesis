@@ -210,8 +210,8 @@ static IplImage* splat(int *coeffs, CvSize size, int *plane_coeffs)
     iwht2d(trans, b);
 
     cvMerge(l, a, b, NULL, lab);
-    cvConvertScale(lab, lab8, 1, 0);
-    cvCvtColor(lab8, img, CV_YCrCb2BGR);
+    cvConvertScale(lab, img, 1, 0);
+    //cvCvtColor(lab8, img, CV_YCrCb2BGR);
 
     cvReleaseImage(&l);
     cvReleaseImage(&a);
@@ -385,7 +385,7 @@ static int* block_coeffs(IplImage *img, int* plane_coeffs) {
     unsigned *order_p2 = build_path(plane_coeffs[2], 8);
 
     cvCvtColor(img, lab, CV_BGR2YCrCb);
-    cvSplit(lab, l, a, b, NULL);
+    cvSplit(img, l, a, b, NULL);
 
     wht2d(l, trans);
     quantize(trans, plane_coeffs[0], 8, order_luma, buf, dim);
@@ -488,7 +488,7 @@ static void test_gck2()
     CvSize size = cvGetSize(src);
     int w1 = size.width - 8 + 1, h1 = size.height - 8 + 1;
     int sz = w1*h1, *c_dst;
-    int *i, plane_coeffs[] = {16, 4, 4};
+    int *i, plane_coeffs[] = {2, 9, 5};
     int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     kd_tree kdt;
 
@@ -637,6 +637,32 @@ static int64_t sumimg(IplImage *img, int kern)
     return sum;
 }
 
+#define XY_TO_X(x) ((x)&((1<<16)-1))
+#define XY_TO_Y(y) ((y)>>16)
+static void xy2img(IplImage *xy, IplImage *img, IplImage *recon)
+{
+    int w = xy->width, h = xy->height, i, j;
+    int xystride = xy->widthStep/sizeof(int32_t);
+    int rstride = recon->widthStep;
+    int stride = img->widthStep;
+    int32_t *xydata = (int32_t*)xy->imageData;
+    uint8_t *rdata = (uint8_t*)recon->imageData;
+    uint8_t *data = (uint8_t*)img->imageData;
+
+    for (i = 0; i < h; i++) {
+        for (j = 0; j < w; j++) {
+            int v = xydata[i*xystride + j];
+            int x = XY_TO_X(v), y = XY_TO_Y(v);
+            int rd = i*rstride + j*3, dd = y*stride + x*3;
+            *(rdata + rd + 0) = *(data + dd + 0);
+            *(rdata + rd + 1) = *(data + dd + 1);
+            *(rdata + rd + 2) = *(data + dd + 2);
+        }
+    }
+}
+#undef XY_TO_X
+#undef XY_TO_Y
+
 static void test_complete()
 {
     //IplImage *dst = alignedImageFrom("frames/bbb22.png", 8);
@@ -647,8 +673,9 @@ static void test_complete()
     IplImage *diff = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     IplImage *diff3 = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     IplImage *diff2 = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
+    IplImage *matched = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     int w1 = src_size.width - 8 + 1, h1 = src_size.height - 8 + 1;
-    int plane_coeffs[] = {25, 1, 1}, sz = w1*h1;
+    int plane_coeffs[] = {2, 9, 5}, sz = w1*h1;
     int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     int *i, *di;
     double t1, t2, t3, t4, t5;
@@ -664,7 +691,8 @@ static void test_complete()
     kdt_new(&kdt, i, sz, dim);
     t4 = get_time();
 
-    IplImage *matched = prop_match_complete(&kdt, di, src, dst_size);
+    IplImage *xy = prop_match_complete(&kdt, di, src, dst_size);
+    xy2img(xy, src, matched);
     t5 = get_time();
     IplImage *matched3 = match_complete3(&kdt, di, src, dst_size);
     IplImage *matched2 = match_complete2(&kdt, di, src, dst_size);
@@ -693,9 +721,10 @@ static void test_complete()
     free(di);
     cvReleaseImage(&src);
     cvReleaseImage(&dst);
+    cvReleaseImage(&xy);
     cvReleaseImage(&matched);
-    //cvReleaseImage(&matched2);
-    //cvReleaseImage(&matched3);
+    cvReleaseImage(&matched2);
+    cvReleaseImage(&matched3);
     cvReleaseImage(&diff);
     cvReleaseImage(&diff2);
     cvReleaseImage(&diff3);
