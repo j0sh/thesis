@@ -7,7 +7,7 @@
 <meta name="originator" content="TeX4ht (http://www.cse.ohio-state.edu/~gurari/TeX4ht/)"> 
 <!-- html --> 
 <meta name="src" content="kdtree.tex"> 
-<meta name="date" content="2013-06-10 14:17:00"> 
+<meta name="date" content="2013-06-11 08:53:00"> 
 <link rel="stylesheet" type="text/css" href="kdtree.css"> 
 </head><body 
 >
@@ -1009,23 +1009,23 @@ the number of zero crossings from -1 to 1 (or from black to white)</span></div><
 <!--l. 88--><p class="noindent" >Quickselect is the linear-time median selection algorithm used to find an
 appropriate pivot value for each inner node as the tree is built. First an initial
 guess at the median is made (using the median-of-3 method <span class="cite">[<a 
-href="#XCormenAlgos">1</a>]</span>, and partitions
-elements around that guess, refining the guess at each iteration until convergence.
-A non-recursive implementation from <span class="cite">[<a 
-href="#XDevillardMedian">2</a>]</span> is used, modified to accommodate
-<span 
-class="cmmi-10x-x-109">k</span>-dimensional tuples and to partition tuples around a given axis. Another
-convenient property of the quickselect algorithm is that it approximately sorta
-numbers around the median, wth values growing closer to the median towards
-the middle. This helps amortize the cost of repeated sub-selections, which
-occur on each branch as the tree is built. There is a drawback with the
-quickselect algorithm &#8211; while it will find the median of an unordered list of
-numbers, if the median is duplicated in the list, there is no guarantee
-the median will be pivoted around itself. Hence the median could be
-present in both partitions, leading to much lower query accuracy (and
-makes it impossible for an image to query itself). One solution (as was
-implemented here) is to take a second pass over the data and pivot around
-the median; this is the same algorithm as described in <span class="cite">[<a 
+href="#XCormenAlgos">1</a>]</span>), and partitions
+elements around that guess, refining the guess at each iteration until
+convergence. A non-recursive implementation from <span class="cite">[<a 
+href="#XDevillardMedian">2</a>]</span> is used, modified
+to accommodate <span 
+class="cmmi-10x-x-109">d</span>-dimensional tuples, pivoting tuples around a given
+axis. Another convenient property of the quickselect algorithm is that it
+approximately sorts numbers around the median, wth values growing closer to
+the median towards the middle. This helps amortize the cost of repeated
+sub-selections, which occur on each branch as the tree is built. There is a
+drawback to the quickselect algorithm &#8211; while it will find the median of an
+unordered list of numbers, if the median is duplicated in the list, there is no
+guarantee the median will be pivoted around itself. Hence the median
+could be present in both partitions, leading to much lower query accuracy
+(and makes it impossible for an image to query itself). One solution
+(as was implemented here) is to take a second pass over the data and
+pivot around the median; this algorithm is described in <span class="cite">[<a 
 href="#XCormenAlgos">1</a>]</span> as the Hoare
 Partition. Quicksort suffers from a similar problem as described in <span class="cite">[<a 
 href="#XSedgewickAlgos">6</a>]</span>,
