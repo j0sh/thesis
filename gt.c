@@ -5,6 +5,32 @@
 
 #include "prop.h"
 
+#define XY_TO_X(x) ((x)&((1<<16)-1))
+#define XY_TO_Y(y) ((y)>>16)
+static void xy2img(IplImage *xy, IplImage *img, IplImage *recon)
+{
+    int w = xy->width, h = xy->height, i, j;
+    int xystride = xy->widthStep/sizeof(int32_t);
+    int rstride = recon->widthStep;
+    int stride = img->widthStep;
+    int32_t *xydata = (int32_t*)xy->imageData;
+    uint8_t *rdata = (uint8_t*)recon->imageData;
+    uint8_t *data = (uint8_t*)img->imageData;
+
+    for (i = 0; i < h; i++) {
+        for (j = 0; j < w; j++) {
+            int v = xydata[i*xystride + j];
+            int x = XY_TO_X(v), y = XY_TO_Y(v);
+            int rd = i*rstride + j*3, dd = y*stride + x*3;
+            *(rdata + rd + 0) = *(data + dd + 0);
+            *(rdata + rd + 1) = *(data + dd + 1);
+            *(rdata + rd + 2) = *(data + dd + 2);
+        }
+    }
+}
+#undef XY_TO_X
+#undef XY_TO_Y
+
 static IplImage *alignedImage(CvSize dim, int depth, int chan, int align)
 {
     int w = dim.width, h = dim.height;
@@ -76,8 +102,10 @@ int main(int argc, char **argv)
     IplImage *gtdiff = SAMEAS(dst);
     IplImage *diff2 = SAMEAS(dst);
     IplImage *diff3 = SAMEAS(dst);
+    IplImage *match = SAMEAS(dst);
     start = get_time();
-    IplImage *match = prop_match(src, dst);
+    IplImage *xy = prop_match(src, dst);
+    xy2img(xy, src, match);
     end = get_time();
     cvAbsDiff(match, gt, diff);
     cvAbsDiff(gt, dst, gtdiff);
@@ -105,6 +133,7 @@ int main(int argc, char **argv)
     cvReleaseImage(&gtdiff);
     cvReleaseImage(&match);
     cvReleaseImage(&gt);
+    cvReleaseImage(&xy);
     return 0;
     return 0;
     return 0;

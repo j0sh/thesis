@@ -10,34 +10,10 @@
 #include "kdtree.h"
 
 #define XY_TO_INT(x, y) (((y) << 16) | (x))
-#define XY_TO_X(x) ((x)&((1<<16)-1))
-#define XY_TO_Y(y) ((y)>>16)
 
 #define PACK_SCOREIDX(s, i) ((uint64_t)((uint64_t)s << 32 | (i)))
 #define UNPACK_SCORE(a) ((a) >> 32)
 #define UNPACK_IDX(a) ((a)&(0xFFFFFFFF))
-
-static void xy2img(IplImage *xy, IplImage *img, IplImage *recon)
-{
-    int w = xy->width, h = xy->height, i, j;
-    int xystride = xy->widthStep/sizeof(int32_t);
-    int rstride = recon->widthStep;
-    int stride = img->widthStep;
-    int32_t *xydata = (int32_t*)xy->imageData;
-    uint8_t *rdata = (uint8_t*)recon->imageData;
-    uint8_t *data = (uint8_t*)img->imageData;
-
-    for (i = 0; i < h; i++) {
-        for (j = 0; j < w; j++) {
-            int v = xydata[i*xystride + j];
-            int x = XY_TO_X(v), y = XY_TO_Y(v);
-            int rd = i*rstride + j*3, dd = y*stride + x*3;
-            *(rdata + rd + 0) = *(data + dd + 0);
-            *(rdata + rd + 1) = *(data + dd + 1);
-            *(rdata + rd + 2) = *(data + dd + 2);
-        }
-    }
-}
 
 static int64_t match_score(int *coeffs, kd_node *n, int k)
 {
@@ -128,7 +104,6 @@ static IplImage* match(kd_tree *t, int *coeffs, IplImage *src,
     CvSize dst_size)
 {
     IplImage *xy = cvCreateImage(dst_size, IPL_DEPTH_32S, 1);
-    IplImage *dst = cvCreateImage(dst_size, IPL_DEPTH_8U, 3);
     int w = dst_size.width  - 8 + 1, h = dst_size.height - 8 + 1;
     int k = t->k, sz = w*h, i, sw = src->width - 8 + 1;
     int *prevs = malloc(w*sizeof(int)*2), *prev = prevs;
@@ -149,9 +124,7 @@ static IplImage* match(kd_tree *t, int *coeffs, IplImage *src,
         prev += 2;
     }
     free(prevs);
-    xy2img(xy, src, dst);
-    cvReleaseImage(&xy);
-    return dst;
+    return xy;
 }
 
 static void interleave_data(int *data, int w, int h, int kern_size,
