@@ -1,0 +1,1474 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"  
+  "http://www.w3.org/TR/html4/loose.dtd">  
+<html > 
+<head><title></title> 
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"> 
+<meta name="generator" content="TeX4ht (http://www.cse.ohio-state.edu/~gurari/TeX4ht/)"> 
+<meta name="originator" content="TeX4ht (http://www.cse.ohio-state.edu/~gurari/TeX4ht/)"> 
+<!-- html --> 
+<meta name="src" content="wht.tex"> 
+<meta name="date" content="2013-06-12 03:06:00"> 
+<link rel="stylesheet" type="text/css" href="wht.css"> 
+</head><body 
+>
+   <h3 class="sectionHead"><span class="titlemark">1   </span> <a 
+ id="x1-10001"></a>Transforms using Gray Code Kernels</h3>
+<!--l. 15--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.1   </span> <a 
+ id="x1-20001.1"></a>Preamble</h4>
+<!--l. 15--><p class="noindent" >This work describes some implementation details regarding &#8221;The Gray Code
+Filter Kernels&#8221; <span class="cite">[<a 
+href="#XGCK">1</a>]</span>. The code can be found <a 
+href="https://github.com/j0sh/thesis/blob/master/gck.c" >here</a>.
+<!--l. 17--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.2   </span> <a 
+ id="x1-30001.2"></a>Introduction</h4>
+<!--l. 17--><p class="noindent" >The Gray Code Kernels (GCK) is a family of kernels that was shown in
+<span class="cite">[<a 
+href="#XGCK">1</a>]</span> to be computable with just two operations per sample, per basis.
+This implementation uses the Walsh-Hadamard (WH) kernels that were
+derived in the original paper. The 1-D GCK kernels are defined in <span class="cite">[<a 
+href="#XGCK">1</a>]</span>
+recursively:
+<!--l. 19--><p class="indent" >
+<table 
+class="align">
+        <tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">V </span><sub><span 
+class="cmmi-8">s</span></sub><sup><span 
+class="cmr-8">(0)</span></sup></td>        <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">s,</span></td>                                                                <td 
+class="align-label"><a 
+ id="x1-3001r1"></a>(1)
+        </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">V </span><sub><span 
+class="cmmi-8">s</span></sub><sup><span 
+class="cmr-8">(</span><span 
+class="cmmi-8">k</span><span 
+class="cmr-8">)</span></sup></td>        <td 
+class="align-even"> = <span 
+class="cmsy-10x-x-109">{</span>[<span 
+class="cmmi-10x-x-109">v</span><sub>
+<span 
+class="cmmi-8">s</span></sub><sup><span 
+class="cmr-8">(</span><span 
+class="cmmi-8">k</span><span 
+class="cmsy-8">&minus;</span><span 
+class="cmr-8">1)</span></sup><span 
+class="cmmi-10x-x-109">&alpha;</span><sub>
+<span 
+class="cmmi-8">k</span></sub><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmmi-8">s</span></sub><sup><span 
+class="cmr-8">(</span><span 
+class="cmmi-8">k</span><span 
+class="cmsy-8">&minus;</span><span 
+class="cmr-8">1)</span></sup>]<span 
+class="cmsy-10x-x-109">}</span><span style="margin-left:3.04076pt" class="tmspace"></span><span 
+class="cmmi-10x-x-109">st.</span><span style="margin-left:3.04076pt" class="tmspace"></span><span 
+class="cmmi-10x-x-109">v</span><sub>
+<span 
+class="cmmi-8">s</span></sub><sup><span 
+class="cmr-8">(</span><span 
+class="cmmi-8">k</span><span 
+class="cmsy-8">&minus;</span><span 
+class="cmr-8">1)</span></sup> <span 
+class="cmsy-10x-x-109">&isin; </span><span 
+class="cmmi-10x-x-109">V </span><sub>
+<span 
+class="cmmi-8">s</span></sub><sup><span 
+class="cmr-8">(</span><span 
+class="cmmi-8">k</span><span 
+class="cmsy-8">&minus;</span><span 
+class="cmr-8">1)</span></sup><span 
+class="cmmi-10x-x-109">,</span><span style="margin-left:3.04076pt" class="tmspace"></span><span 
+class="cmmi-10x-x-109">&alpha;</span><sub>
+<span 
+class="cmmi-8">k</span></sub> <span 
+class="cmsy-10x-x-109">&isin;{</span>+1<span 
+class="cmmi-10x-x-109">,</span><span style="margin-left:3.04076pt" class="tmspace"></span>-1<span 
+class="cmsy-10x-x-109">}</span></td>                <td 
+class="align-label"><a 
+ id="x1-3002r2"></a>(2)        </td></tr></table>
+<!--l. 24--><p class="indent" >   where <span 
+class="cmmi-10x-x-109">&alpha;</span><sub><span 
+class="cmmi-8">k</span></sub><span 
+class="cmmi-10x-x-109">v </span>indicates the multiplication of the vector <span 
+class="cmmi-10x-x-109">v </span>by <span 
+class="cmmi-10x-x-109">&alpha;</span><sub><span 
+class="cmmi-8">k</span></sub> and [<span 
+class="cmmi-10x-x-109">...</span>] indicates
+concatenation. For our purposes, <span 
+class="cmmi-10x-x-109">s </span>= [1] which generates the WH basis set in
+<span 
+class="cmmi-10x-x-109">V </span>.
+                                                                     
+
+                                                                     
+<!--l. 26--><p class="indent" >   Now, the sequence <span 
+class="cmmi-10x-x-109">&alpha; </span>= (<span 
+class="cmmi-10x-x-109">&alpha;</span><sub><span 
+class="cmr-8">1</span></sub><span 
+class="cmmi-10x-x-109">...&alpha;</span><sub><span 
+class="cmmi-8">k</span></sub>) uniquely defines a kernel <span 
+class="cmmi-10x-x-109">v </span><span 
+class="cmsy-10x-x-109">&isin; </span><span 
+class="cmmi-10x-x-109">V </span><sub><span 
+class="cmmi-8">s</span></sub><sup><span 
+class="cmr-8">(</span><span 
+class="cmmi-8">k</span><span 
+class="cmr-8">)</span></sup>, referred
+to as the <span 
+class="cmmi-10x-x-109">&alpha;</span>-index. Two kernels <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmr-8">+</span></sub><span 
+class="cmmi-10x-x-109">,</span><span style="margin-left:3.04076pt" class="tmspace"></span><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmsy-8">&minus;</span></sub> are <span 
+class="cmmi-10x-x-109">&alpha;</span>-related iff the hamming
+distance of their <span 
+class="cmmi-10x-x-109">&alpha;</span>-indices is one. Hence the two kernels have the form
+(<span 
+class="cmmi-10x-x-109">&alpha;</span><sub><span 
+class="cmr-8">1</span></sub><span 
+class="cmmi-10x-x-109">...&alpha;</span><sub><span 
+class="cmmi-8">r</span><span 
+class="cmsy-8">&minus;</span><span 
+class="cmr-8">1</span></sub><span 
+class="cmmi-10x-x-109">,</span>+1<span 
+class="cmmi-10x-x-109">,...,&alpha;</span><sub><span 
+class="cmmi-8">k</span></sub>) and (<span 
+class="cmmi-10x-x-109">&alpha;</span><sub><span 
+class="cmr-8">1</span></sub><span 
+class="cmmi-10x-x-109">...&alpha;</span><sub><span 
+class="cmmi-8">r</span><span 
+class="cmsy-8">&minus;</span><span 
+class="cmr-8">1</span></sub><span 
+class="cmmi-10x-x-109">,</span><span 
+class="cmsy-10x-x-109">&minus;</span>1<span 
+class="cmmi-10x-x-109">,...&alpha;</span><sub><span 
+class="cmmi-8">k</span></sub>). Define their sum <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmmi-8">p</span></sub> and
+difference <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmmi-8">m</span></sub>:
+<!--l. 28--><p class="indent" >
+<table 
+class="align">
+              <tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmmi-8">p</span></sub></td>                     <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmr-8">+</span></sub> + <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmsy-8">&minus;</span></sub></td>                                                  <td 
+class="align-label"><a 
+ id="x1-3003r3"></a>(3)
+              </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmmi-8">m</span></sub></td>                    <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmr-8">+</span></sub> <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmsy-8">&minus;</span></sub></td>                                                  <td 
+class="align-label"><a 
+ id="x1-3004r4"></a>(4)
+              </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">...</span></td>                     <td 
+class="align-even"></td>                                              <td 
+class="align-label"><a 
+ id="x1-3005r5"></a>(5)
+              </td></tr><tr><td 
+class="align-odd">[0<sub><span 
+class="cmr-8">&Delta;</span></sub><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmmi-8">p</span></sub>]</td>                 <td 
+class="align-even"> = [<span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmmi-8">m</span></sub>0<sub><span 
+class="cmr-8">&Delta;</span></sub>]</td>                                                   <td 
+class="align-label"><a 
+ id="x1-3006r6"></a>(6)
+              </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmmi-8">p</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;)</td>              <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmmi-8">m</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                                                     <td 
+class="align-label"><a 
+ id="x1-3007r7"></a>(7)
+              </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">...</span></td>                     <td 
+class="align-even"></td>                                              <td 
+class="align-label"><a 
+ id="x1-3008r8"></a>(8)
+              </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                  <td 
+class="align-even"> = +<span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;) + <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>) + <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;)</td>                            <td 
+class="align-label"><a 
+ id="x1-3009r9"></a>(9)
+              </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                  <td 
+class="align-even"> = <span 
+class="cmsy-10x-x-109">&minus;</span><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;) + <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>) <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;)</td>                            <td 
+class="align-label"><a 
+ id="x1-3010r10"></a>(10)
+              </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">...</span></td>                     <td 
+class="align-even"></td>                                              <td 
+class="align-label"><a 
+ id="x1-3011r11"></a>(11)
+              </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                  <td 
+class="align-even"> = +<span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;) + <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>) + <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;)</td>                            <td 
+class="align-label"><a 
+ id="x1-3012r12"></a>(12)
+              </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                  <td 
+class="align-even"> = <span 
+class="cmsy-10x-x-109">&minus;</span><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;) + <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>) <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;)</td>                            <td 
+class="align-label"><a 
+ id="x1-3013r13"></a>(13)              </td></tr></table>
+<!--l. 42--><p class="indent" >   where &Delta; = 2<sup><span 
+class="cmmi-8">r</span><span 
+class="cmsy-8">&minus;</span><span 
+class="cmr-8">1</span></sup><span 
+class="cmsy-10x-x-109">|</span><span 
+class="cmmi-10x-x-109">s</span><span 
+class="cmsy-10x-x-109">| </span>is the length of the common prefix vector between <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmr-8">+</span></sub> and
+<span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmsy-8">&minus;</span></sub>, <span 
+class="cmsy-10x-x-109">|</span><span 
+class="cmmi-10x-x-109">s</span><span 
+class="cmsy-10x-x-109">| </span>the length of <span 
+class="cmmi-10x-x-109">s </span>and 0<sub><span 
+class="cmr-8">&Delta;</span></sub> a zero-vector of length &Delta;. <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">0</span></sub> denotes the first result
+of convolving an input signal with <span 
+class="cmmi-10x-x-109">v</span><sub><span 
+class="cmr-8">0</span></sub>; from there, subsequent results <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">1</span></sub><span 
+class="cmmi-10x-x-109">,b</span><sub><span 
+class="cmr-8">2</span></sub><span 
+class="cmmi-10x-x-109">...b</span><sub><span 
+class="cmsy-8">|</span><span 
+class="cmmi-8">s</span><span 
+class="cmsy-8">|</span></sub>
+can be calculated using only previous results. For a complete derivation of all
+these equations, see <span class="cite">[<a 
+href="#XGCK">1</a>]</span>.
+<!--l. 44--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-30141"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 45--><p class="noindent" ><img 
+src="images/bterms.png" alt="PIC"  
+width="292.99928pt" height="177.99956pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;1: </span><span  
+class="content">Calculating <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub> given <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub> (from <span class="cite">[<a 
+href="#XGCK">1</a>]</span>)</span></div><!--tex4ht:label?: x1-30141 -->
+                                                                     
+
+                                                                     
+<!--l. 47--><p class="indent" >   </div><hr class="endfigure">
+   <h4 class="subsectionHead"><span class="titlemark">1.3   </span> <a 
+ id="x1-40001.3"></a><span 
+class="cmmi-10x-x-109">&alpha;</span>-Terms</h4>
+<!--l. 49--><p class="noindent" >The definitions from Section <a 
+href="#x1-30001.2">1.2<!--tex4ht:ref: intro --></a> lead to interesting properties that can be used to
+our advantage. First is the observation that the <span 
+class="cmmi-10x-x-109">&alpha;</span>-index uniquely defines a kernel,
+and it is the <span 
+class="cmmi-10x-x-109">&alpha;</span>-relation that determines the GCK filtering procedure. Because of
+that, there is no need to explicitly generate the basis set <span 
+class="cmmi-10x-x-109">V </span>for WH kernels. To
+exploit this, construct the binary representation of <span 
+class="cmmi-10x-x-109">&alpha;</span>, where + maps to 0, and -
+to 1:
+   <div class="table">
+                                                                     
+
+                                                                     
+<!--l. 52--><p class="indent" >   <a 
+ id="x1-40011"></a><a 
+ id="x1-600023"></a><hr class="float"><div class="float" 
+>
+                                                                     
+
+                                                                     
+<div class="tabular"> <table id="TBL-1" class="tabular" 
+cellspacing="0" cellpadding="0" rules="groups" 
+><colgroup id="TBL-1-1g"><col 
+id="TBL-1-1"></colgroup><colgroup id="TBL-1-2g"><col 
+id="TBL-1-2"></colgroup><colgroup id="TBL-1-3g"><col 
+id="TBL-1-3"></colgroup><colgroup id="TBL-1-4g"><col 
+id="TBL-1-4"></colgroup><colgroup id="TBL-1-5g"><col 
+id="TBL-1-5"></colgroup><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-1-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-1"  
+class="td11">index</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-2"  
+class="td11"><span 
+class="cmmi-10x-x-109">v                            </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-3"  
+class="td11"><span 
+class="cmmi-10x-x-109">&alpha;</span>-index</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-4"  
+class="td11"><span 
+class="cmmi-10x-x-109">&alpha;</span>-binary</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-5"  
+class="td11"><span 
+class="cmmi-10x-x-109">&alpha;</span>-decimal</td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-2-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-1"  
+class="td11">0       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-2"  
+class="td11"><span 
+class="cmtt-10x-x-109">s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s</span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-3"  
+class="td11"><span 
+class="cmtt-10x-x-109">+ + + </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-4"  
+class="td11"><span 
+class="cmtt-10x-x-109">0 0 0  </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-5"  
+class="td11">0           </td></tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-3-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-1"  
+class="td11">1 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-2"  
+class="td11"><span 
+class="cmtt-10x-x-109">s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s -s -s -s</span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-3"  
+class="td11"><span 
+class="cmtt-10x-x-109">+ + - </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-4"  
+class="td11"><span 
+class="cmtt-10x-x-109">0 0 1 </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-5"  
+class="td11">1</td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-4-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-1"  
+class="td11">2       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-2"  
+class="td11"><span 
+class="cmtt-10x-x-109">s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s -s -s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s</span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-3"  
+class="td11"><span 
+class="cmtt-10x-x-109">+ - - </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-4"  
+class="td11"><span 
+class="cmtt-10x-x-109">0 1 1  </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-5"  
+class="td11">3           </td></tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-5-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-1"  
+class="td11">3 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-2"  
+class="td11"><span 
+class="cmtt-10x-x-109">s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s -s</span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-3"  
+class="td11"><span 
+class="cmtt-10x-x-109">+ - + </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-4"  
+class="td11"><span 
+class="cmtt-10x-x-109">0 1 0 </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-5"  
+class="td11">2</td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-6-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-1"  
+class="td11">4       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-2"  
+class="td11"><span 
+class="cmtt-10x-x-109">s -s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s</span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-3"  
+class="td11"><span 
+class="cmtt-10x-x-109">- - + </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-4"  
+class="td11"><span 
+class="cmtt-10x-x-109">1 1 0  </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-5"  
+class="td11">6           </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-7-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-1"  
+class="td11">5       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-2"  
+class="td11"><span 
+class="cmtt-10x-x-109">s -s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s</span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-3"  
+class="td11"><span 
+class="cmtt-10x-x-109">- - - </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-4"  
+class="td11"><span 
+class="cmtt-10x-x-109">1 1 1  </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-7-5"  
+class="td11">7           </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-8-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-1"  
+class="td11">6       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-2"  
+class="td11"><span 
+class="cmtt-10x-x-109">s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s</span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-3"  
+class="td11"><span 
+class="cmtt-10x-x-109">- + - </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-4"  
+class="td11"><span 
+class="cmtt-10x-x-109">1 0 1  </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-8-5"  
+class="td11">5           </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-9-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-1"  
+class="td11">7       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-2"  
+class="td11"><span 
+class="cmtt-10x-x-109">s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s </span><span 
+class="cmtt-10x-x-109">&#x00A0;s -s</span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-3"  
+class="td11"><span 
+class="cmtt-10x-x-109">- + + </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-4"  
+class="td11"><span 
+class="cmtt-10x-x-109">1 0 0  </span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-9-5"  
+class="td11">4           </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-10-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-10-1"  
+class="td11">     </td></tr></table></div>
+<br /> <div class="caption" 
+><span class="id">Table&#x00A0;1: </span><span  
+class="content">Mapping kernels <span 
+class="cmmi-10x-x-109">v </span><span 
+class="cmsy-10x-x-109">&isin; </span><span 
+class="cmmi-10x-x-109">V</span> <sup><span 
+class="cmr-8">(3)</span></sup> to various representations</span></div><!--tex4ht:label?: x1-40011 -->
+                                                                     
+
+                                                                     
+   </div><hr class="endfloat" />
+   </div>
+<!--l. 68--><p class="indent" >   The key relationship in Table <span 
+class="cmbx-10x-x-109">??</span> is that <span 
+class="cmmi-10x-x-109">&alpha;</span>-decimal is simply the Gray code
+representation of the index value. From there, the GCK computation of the
+relevant <span 
+class="cmmi-10x-x-109">&alpha;</span>-terms can proceed with simple bit-twiddling operations as found in
+Section <a 
+href="#x1-60001.5">1.5<!--tex4ht:ref: impl --></a>.
+   <h4 class="subsectionHead"><span class="titlemark">1.4   </span> <a 
+ id="x1-50001.4"></a><span 
+class="cmmi-10x-x-109">b</span>-Terms</h4>
+<!--l. 70--><p class="noindent" >Recall the term <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmmi-8">p</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;) = <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmmi-8">m</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>) from Section <a 
+href="#x1-30001.2">1.2<!--tex4ht:ref: intro --></a>. In the signals sense, the
+system <span 
+class="cmmi-10x-x-109">y</span>(<span 
+class="cmmi-10x-x-109">t</span>) = <span 
+class="cmmi-10x-x-109">x</span>(<span 
+class="cmmi-10x-x-109">t</span><span 
+class="cmsy-10x-x-109">&minus;</span><span 
+class="cmmi-10x-x-109">&tau;</span>) indicates a time delay &#8211; that is, the output at <span 
+class="cmmi-10x-x-109">t </span>= <span 
+class="cmmi-10x-x-109">&tau; </span>is the
+input at <span 
+class="cmmi-10x-x-109">t </span>= 0 <span class="cite">[<a 
+href="#XJohnsonEE">2</a>]</span>. In practice, that means the current position <span 
+class="cmmi-10x-x-109">t </span>= <span 
+class="cmmi-10x-x-109">i</span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta; gets its
+delayed result after &Delta; iterations. To avoid a dependency on the future, instead of
+delaying the signal, advance it:
+<!--l. 72--><p class="indent" >
+<table 
+class="align">
+             <tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmmi-8">p</span></sub>(<span 
+class="cmmi-10x-x-109">i </span><span 
+class="cmsy-10x-x-109">&minus; </span>&Delta;)</td>                 <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmmi-8">m</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                                                 <td 
+class="align-label"><a 
+ id="x1-5001r14"></a>(14)
+             </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmmi-8">p</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                     <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmmi-8">m</span></sub>(<span 
+class="cmmi-10x-x-109">i </span>+ &Delta;)</td>                                             <td 
+class="align-label"><a 
+ id="x1-5002r15"></a>(15)
+             </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>) + <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>             <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i </span>+ &Delta;) <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i </span>+ &Delta;)</td>                                 <td 
+class="align-label"><a 
+ id="x1-5003r16"></a>(16)
+             </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                    <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i </span>+ &Delta;) <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i </span>+ &Delta;) <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                          <td 
+class="align-label"><a 
+ id="x1-5004r17"></a>(17)
+             </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                    <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i </span>+ &Delta;) <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmsy-8">&minus;</span></sub>(<span 
+class="cmmi-10x-x-109">i </span>+ &Delta;) <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">b</span><sub><span 
+class="cmr-8">+</span></sub>(<span 
+class="cmmi-10x-x-109">i</span>)</td>                          <td 
+class="align-label"><a 
+ id="x1-5005r18"></a>(18)             </td></tr></table>
+<!--l. 80--><p class="indent" >   This notation is a bit backwards in terms of computer code &#8211; but it allows us
+to use W-H results, previously computed &Delta; iterations ago, in just two
+subtractions per pixel, per base.
+                                                                     
+
+                                                                     
+<!--l. 82--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.5   </span> <a 
+ id="x1-60001.5"></a>Implementation</h4>
+<!--l. 82--><p class="noindent" >From our derivation of the <span 
+class="cmmi-10x-x-109">&alpha;</span>-terms and the <span 
+class="cmmi-10x-x-109">b</span>-terms, the implementation becomes
+clear. The 1-D case is straightforward as shown in Algorithm <a 
+href="#x1-6001r1">1<!--tex4ht:ref: gck:1d --></a> which computes
+<span 
+class="cmmi-10x-x-109">b</span>(0)<span 
+class="cmmi-10x-x-109">,</span><span 
+class="cmmi-10x-x-109">&#x00A0;b</span>(1)<span 
+class="cmmi-10x-x-109">,</span><span 
+class="cmmi-10x-x-109">&#x00A0;...,</span><span 
+class="cmmi-10x-x-109">&#x00A0;b</span>(<span 
+class="cmmi-10x-x-109">w</span>) in sequency order for an output of length <span 
+class="cmmi-10x-x-109">w</span>, following
+Table <a 
+href="#x1-40011">1<!--tex4ht:ref: gck:alphaindextable --></a>.
+   <!--l. 84-->
+<a 
+ id="x1-6001r1"></a>
+<a 
+ id="x1-6002"></a>
+   <div class="lstlisting" id="listing-1"><span class="label"><a 
+ id="x1-6003r1"></a></span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">gck1d</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">data</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">data_len</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">kern_len</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">bases</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6004r2"></a></span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6005r3"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">w</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">data_len</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">+</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">kern_len</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6006r4"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">res</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">len</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">bases</span><span 
+class="cmtt-10x-x-109">],</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">cur</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">res</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">prev</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6007r5"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">bits</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">log2</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">kern_len</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6008r6"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6009r7"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">calculate_dc</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">data</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">cur</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">data_len</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">kern_len</span><span 
+class="cmtt-10x-x-109">);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">//</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">first</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">kernel</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6010r8"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">for</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">bases</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">++)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6011r9"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">alpha</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">gray_code</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6012r10"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">prefix</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">prefix_len</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">gray_code</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">-1),</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">alpha</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">bits</span><span 
+class="cmtt-10x-x-109">);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6013r11"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">delta</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">prefix</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6014r12"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">sign</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">alpha</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003E;&#x003E;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">bits</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">prefix</span><span 
+class="cmtt-10x-x-109">))</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&amp;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">//</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">determine</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">+</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">or</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6015r13"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">prev</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">cur</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6016r14"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">cur</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">+=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">len</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6017r15"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">for</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">delta</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">++)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">cur</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">prev</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">];</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">//</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">zero</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">pad</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">delta</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6018r16"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">for</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">w</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">++)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6019r17"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">if</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">sign</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">cur</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">cur</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">delta</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">cur</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">delta</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">prev</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">];</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6020r18"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">else</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">cur</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">cur</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">delta</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">prev</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">delta</span><span 
+class="cmtt-10x-x-109">]</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">-</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">prev</span><span 
+class="cmtt-10x-x-109">[</span><span 
+class="cmtt-10x-x-109">j</span><span 
+class="cmtt-10x-x-109">];</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6021r19"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">}</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6022r20"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">}</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6023r21"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">return</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">res</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6024r22"></a></span><span 
+class="cmtt-10x-x-109">}</span>
+   
+<br /> <div class="caption" 
+><span class="id">Algorithm&#x00A0;1: </span><span  
+class="content">1-D GCK</span></div><!--tex4ht:label?: x1-60001 -->
+   </div>
+<!--l. 109--><p class="indent" >   The 2-D case takes a bit more thought. First, an <span 
+class="cmmi-10x-x-109">&alpha;</span>-related ordering must be
+defined for 2-D kernels; we produce a path similar to Figure <a 
+href="#x1-60252">2<!--tex4ht:ref: gck:ordering --></a>. Adjacent kernels
+(whether from top or left) are <span 
+class="cmmi-10x-x-109">&alpha;</span>-related, and are re-used (with a preference for
+kernels from the left). When re-using a result from the left, the GCK
+computation is run against the <span 
+class="cmmi-10x-x-109">&alpha;</span>-related result from the top (and vice versa). In
+this way, each kernel result can be computed with a single pass through the
+image.
+<!--l. 111--><p class="indent" >   The horizontal case is simply the 1-D transform, where <span 
+class="cmmi-10x-x-109">b</span>(0)<span 
+class="cmmi-10x-x-109">,</span><span 
+class="cmmi-10x-x-109">&#x00A0;b</span>(1)<span 
+class="cmmi-10x-x-109">,</span><span 
+class="cmmi-10x-x-109">&#x00A0;...,</span><span 
+class="cmmi-10x-x-109">&#x00A0;b</span>(<span 
+class="cmmi-10x-x-109">w</span>)
+is computed, and repeated for each row of length <span 
+class="cmmi-10x-x-109">w</span>. The vertical case
+attempts to operate on contiguous blocks as much as possible to preserve
+locality, so the work is transposed &#8211; <span 
+class="cmmi-10x-x-109">b</span>(<span 
+class="cmmi-10x-x-109">i</span>) is processed in one scan for each
+element of row <span 
+class="cmmi-10x-x-109">i </span>before moving on to <span 
+class="cmmi-10x-x-109">b</span>(<span 
+class="cmmi-10x-x-109">i </span>+ 1) at the next row, and so
+on.
+<!--l. 113--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-60252"></a><a 
+ id="x1-70005"></a><a 
+ id="x1-700010"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 114--><p class="noindent" ><img 
+src="images/ordering.png" alt="PIC"  
+width="453.99889pt" height="450.9989pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;2: </span><span  
+class="content">2D traversal path. Adjacent kernels are <span 
+class="cmmi-10x-x-109">&alpha;</span>-related.</span></div><!--tex4ht:label?: x1-60252 -->
+                                                                     
+
+                                                                     
+<!--l. 117--><p class="indent" >   </div><hr class="endfigure">
+   <h4 class="subsectionHead"><span class="titlemark">1.6   </span> <a 
+ id="x1-70001.6"></a>Supplemental Algorithms</h4>
+   <!--l. 121-->
+<a 
+ id="x1-7001r2"></a>
+<a 
+ id="x1-7002"></a>
+   <div class="lstlisting" id="listing-2"><span class="label"><a 
+ id="x1-7003r1"></a></span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">gray_code</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">a</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7004r2"></a></span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7005r3"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">return</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">a</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003E;&#x003E;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">^</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">a</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7006r4"></a></span><span 
+class="cmtt-10x-x-109">}</span>
+   
+<br /> <div class="caption" 
+><span class="id">Algorithm&#x00A0;2: </span><span  
+class="content">Decimal to Gray Code conversion</span></div><!--tex4ht:label?: x1-70001 -->
+   </div>
+   <!--l. 128-->
+<a 
+ id="x1-7007r3"></a>
+<a 
+ id="x1-7008"></a>
+   <div class="lstlisting" id="listing-3"><span class="label"><a 
+ id="x1-7009r1"></a></span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">prefix_len</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">a</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">b</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">bits</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7010r2"></a></span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7011r3"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">count</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">mask</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">bits</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7012r4"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">while</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">mask</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&amp;&amp;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">a</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&amp;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">mask</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">==</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">b</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&amp;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">mask</span><span 
+class="cmtt-10x-x-109">))</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7013r5"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">count</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">+=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7014r6"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">mask</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003E;&#x003E;=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7015r7"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">}</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7016r8"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">return</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">count</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-7017r9"></a></span><span 
+class="cmtt-10x-x-109">}</span>
+   
+<br /> <div class="caption" 
+><span class="id">Algorithm&#x00A0;3: </span><span  
+class="content">Length of bitwise prefix between two integers, and the number
+of bits they occupy</span></div><!--tex4ht:label?: x1-70001 -->
+   </div>
+<!--l. 1--><p class="noindent" >
+   <h3 class="likesectionHead"><a 
+ id="x1-80001.6"></a>References</h3>
+<!--l. 1--><p class="noindent" >
+   <div class="thebibliography">
+   <p class="bibitem" ><span class="biblabel">
+ [1]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XGCK"></a>Gil Ben-Artzi, Hagit Hel-Or, and Yacov Hel-Or. The gray-code filter
+   kernels. <span 
+class="cmti-10x-x-109">Pattern Analysis and Machine Intelligence, IEEE Transactions</span>
+   <span 
+class="cmti-10x-x-109">on</span>, 29(3):382&#8211;393, March.
+   </p>
+   <p class="bibitem" ><span class="biblabel">
+ [2]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XJohnsonEE"></a>Don Johnson. <span 
+class="cmti-10x-x-109">Fundamentals of Electrical Engineering 1</span>. Connexions,
+   2008.
+</p>
+   </div>
+    
+</body></html> 
+
+                                                                     
+
+
