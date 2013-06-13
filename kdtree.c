@@ -180,6 +180,7 @@ void kdt_new(kd_tree *t, int *points, int nb_points, int k)
     for (i = 0; i < nb_points; i++) t->points[i] = points+i*k;
     t->nb_nodes = 0;
     t->start = points;
+    t->end = points + nb_points * k;
     t->k = k; // dimensionality
     t->order = calc_dimstats(points, nb_points, k);
     t->root = kdt_new_in(t, t->points, nb_points, 0);
