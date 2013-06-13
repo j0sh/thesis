@@ -15,6 +15,10 @@
 #define XY_TO_X(x) ((x)&((1<<16)-1))
 #define XY_TO_Y(y) ((y)>>16)
 
+#define PACK_SCOREIDX(s, i) ((uint64_t)((uint64_t)s << 32 | (i)))
+#define UNPACK_SCORE(a) ((a) >> 32)
+#define UNPACK_IDX(a) ((a)&(0xFFFFFFFF))
+
 #include <sys/time.h>
 static inline double get_time()
 {
@@ -728,9 +732,33 @@ static void test_complete()
     cvReleaseImage(&diff3);
 }
 
-static void xy2blks(IplImage *xy, IplImage *src, IplImage *recon, int kernsz)
+static void xy2blks_special(IplImage *xy, IplImage *src, IplImage *recon, int kernsz)
 {
     int w = xy->width - 7, h = xy->height - 7, i, j;
+    int xystride = xy->widthStep/sizeof(int32_t);
+    int rstride = recon->widthStep;
+    int stride = src->widthStep;
+    int32_t *xydata = (int32_t*)xy->imageData;
+    uint8_t *rdata = (uint8_t*)recon->imageData;
+    uint8_t *data = (uint8_t*)src->imageData;
+    for (i = 0; i < h; i++) {
+        for (j = 0; j < w; j++) {
+            int v = xydata[i*xystride + j], k;
+            int x = XY_TO_X(v), y = XY_TO_Y(v);
+            for (k = 0; k < kernsz*kernsz; k++) {
+                int xoff = k % kernsz, yoff = k / kernsz;
+                int rd = (i*kernsz + yoff)*rstride + (j*kernsz + xoff)*3;
+                int dd = (y + yoff)*stride + (x + xoff)*3;
+                *(rdata + rd + 0) = *(data + dd + 0);
+                *(rdata + rd + 1) = *(data + dd + 1);
+                *(rdata + rd + 2) = *(data + dd + 2);
+            }
+        }
+    }
+}
+static void xy2blks(IplImage *xy, IplImage *src, IplImage *recon, int kernsz)
+{
+    int w = xy->width, h = xy->height, i, j;
     int xystride = xy->widthStep/sizeof(int32_t);
     int rstride = recon->widthStep;
     int stride = src->widthStep;
@@ -755,6 +783,76 @@ static void xy2blks(IplImage *xy, IplImage *src, IplImage *recon, int kernsz)
 #undef XY_TO_X
 #undef XY_TO_Y
 
+static int64_t match_score(int *coeffs, kd_node *n, int k)
+{
+    int i, j, *u, *v, **p = n->value, best = INT_MAX, idx = -1;
+    for (i = 0; i < n->nb; i++) {
+        int dist = 0;
+        u = coeffs;
+        v = *p++;
+        for (j = 0; j < k; j++) {
+            int a = *u++;
+            int b = *v++;
+            dist += (a - b)*(a - b);
+        }
+        if (dist < best) {
+            best = dist;
+            idx = i;
+        }
+    }
+    return PACK_SCOREIDX(best, idx);
+}
+
+static int query4(kd_tree *t, int *coeffs, kd_node **nodes,
+    int x, int y, int w)
+{
+    kd_node *n = kdt_query(t, coeffs), *top, *left;
+    int64_t res = match_score(coeffs, n, t->k);
+    int score = UNPACK_SCORE(res);
+    int *pos = n->value[UNPACK_IDX(res)];
+    if (!y) goto try_left;
+    top = nodes[y*(w-1)+x];
+    res = match_score(coeffs, top, t->k);
+    if (UNPACK_SCORE(res) < score) {
+        score = UNPACK_SCORE(res);
+        pos = top->value[UNPACK_IDX(res)];
+        n = top;
+    }
+try_left:
+    if (!x) goto query_finish;
+    left = nodes[y*w+x-1];
+    res = match_score(coeffs, left, t->k);
+    if (UNPACK_SCORE(res) < score) {
+        score = UNPACK_SCORE(res);
+        pos = left->value[UNPACK_IDX(res)];
+        n = left;
+    }
+query_finish:
+    nodes[y*w+x] = n;
+    return (pos - t->start)/t->k;
+}
+
+static IplImage *match4(kd_tree *t, int *coeffs, CvSize src_size, CvSize dst_size)
+{
+    int i, j, k = t->k, sw = src_size.width - 8 + 1;
+    CvSize size = {dst_size.width/8, dst_size.height/8};
+    kd_node **nodes = malloc(sizeof(kd_node*)*size.width*size.height);
+    IplImage *xy = cvCreateImage(size, IPL_DEPTH_32S, 1);
+    int *xydata = (int*)xy->imageData;
+    int xystride = xy->widthStep/sizeof(int);
+    for (i = 0; i < size.height; i++) {
+        for (j = 0; j < size.width; j++) {
+            if (!j) xydata = (int*)xy->imageData + i * xystride;
+            int sxy = query4(t, coeffs, nodes, j, i, size.width);
+            int sx = sxy % sw, sy = sxy / sw;
+            *xydata++ = XY_TO_INT(sx, sy);
+            coeffs += k;
+        }
+    }
+    free(nodes);
+    return xy;
+}
+
 static void test_gck3()
 {
     IplImage *dst = alignedImageFrom("frames/bbb22.png", 8);
@@ -766,19 +864,34 @@ static void test_gck3()
     int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     kd_tree kdt;
     IplImage *recon = cvCreateImage(dsz, dst->depth, dst->nChannels);
+    IplImage *recon2 = cvCreateImage(dsz, dst->depth, dst->nChannels);
+    IplImage *diff = cvCreateImage(dsz, dst->depth, dst->nChannels);
+    IplImage *diff2 = cvCreateImage(dsz, dst->depth, dst->nChannels);
 
     prop_coeffs(src, plane_coeffs, &srci);
     dsti = block_coeffs(dst, plane_coeffs);
     memset(&kdt, 0, sizeof(kdt));
     kdt_new(&kdt, srci, sz, dim);
     IplImage *xy = prop_match_complete(&kdt, dsti, src, dst_blks);
-    xy2blks(xy, src, recon, 8);
-    cvShowImage("recon", recon);
+    xy2blks_special(xy, src, recon, 8);
+    IplImage *xy2 = match4(&kdt, dsti, ssz, dsz);
+    xy2blks(xy2, src, recon2, 8);
+    cvAbsDiff(recon, dst, diff);
+    cvAbsDiff(recon2, dst, diff2);
+    cvShowImage("prop", recon);
+    cvShowImage("match4", recon2);
+    printf("prop: %lld\nmatch4: %lld\n",
+        sumimg(diff, 8), sumimg(diff2, 8));
     cvWaitKey(0);
     cvReleaseImage(&xy);
+    cvReleaseImage(&xy2);
     free(srci);
     free(dsti);
     kdt_free(&kdt);
+    cvReleaseImage(&recon);
+    cvReleaseImage(&recon2);
+    cvReleaseImage(&diff);
+    cvReleaseImage(&diff2);
 }
 
 int main()
