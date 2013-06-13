@@ -660,8 +660,6 @@ static void xy2img(IplImage *xy, IplImage *img, IplImage *recon)
         }
     }
 }
-#undef XY_TO_X
-#undef XY_TO_Y
 
 static void test_complete()
 {
@@ -728,6 +726,59 @@ static void test_complete()
     cvReleaseImage(&diff);
     cvReleaseImage(&diff2);
     cvReleaseImage(&diff3);
+}
+
+static void xy2blks(IplImage *xy, IplImage *src, IplImage *recon, int kernsz)
+{
+    int w = xy->width - 7, h = xy->height - 7, i, j;
+    int xystride = xy->widthStep/sizeof(int32_t);
+    int rstride = recon->widthStep;
+    int stride = src->widthStep;
+    int32_t *xydata = (int32_t*)xy->imageData;
+    uint8_t *rdata = (uint8_t*)recon->imageData;
+    uint8_t *data = (uint8_t*)src->imageData;
+    for (i = 0; i < h; i++) {
+        for (j = 0; j < w; j++) {
+            int v = xydata[i*xystride + j], k;
+            int x = XY_TO_X(v), y = XY_TO_Y(v);
+            for (k = 0; k < kernsz*kernsz; k++) {
+                int xoff = k % kernsz, yoff = k / kernsz;
+                int rd = (i*kernsz + yoff)*rstride + (j*kernsz + xoff)*3;
+                int dd = (y + yoff)*stride + (x + xoff)*3;
+                *(rdata + rd + 0) = *(data + dd + 0);
+                *(rdata + rd + 1) = *(data + dd + 1);
+                *(rdata + rd + 2) = *(data + dd + 2);
+            }
+        }
+    }
+}
+#undef XY_TO_X
+#undef XY_TO_Y
+
+static void test_gck3()
+{
+    IplImage *dst = alignedImageFrom("frames/bbb22.png", 8);
+    IplImage *src = alignedImageFrom("frames/bbb19.png", 8);
+    CvSize ssz = cvGetSize(src), dsz = cvGetSize(dst);
+    CvSize dst_blks = {(dsz.width/8)+7, (dsz.height/8)+7};
+    int w1 = ssz.width - 8 + 1, h1 = ssz.height - 8 + 1;
+    int plane_coeffs[] = {2, 9, 5}, *srci, *dsti, sz = w1*h1;
+    int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
+    kd_tree kdt;
+    IplImage *recon = cvCreateImage(dsz, dst->depth, dst->nChannels);
+
+    prop_coeffs(src, plane_coeffs, &srci);
+    dsti = block_coeffs(dst, plane_coeffs);
+    memset(&kdt, 0, sizeof(kdt));
+    kdt_new(&kdt, srci, sz, dim);
+    IplImage *xy = prop_match_complete(&kdt, dsti, src, dst_blks);
+    xy2blks(xy, src, recon, 8);
+    cvShowImage("recon", recon);
+    cvWaitKey(0);
+    cvReleaseImage(&xy);
+    free(srci);
+    free(dsti);
+    kdt_free(&kdt);
 }
 
 int main()
