@@ -11,7 +11,8 @@
 
 #include "kdtree.h"
 #include "prop.h"
- 
+#include "sal.h"
+
 #define XY_TO_INT(x, y) (((y) << 16) | (x))
 #define XY_TO_X(x) ((x)&((1<<16)-1))
 #define XY_TO_Y(y) ((y)>>16)
@@ -181,11 +182,10 @@ static IplImage *resize2(IplImage *img, CvSize sz)
     return ret;
 }
 
-static void write2file(char *fname, IplImage *img, CvSize sz)
+static void write2file(char *fname, IplImage *img)
 {
-    IplImage *res = resize2(img, sz);
-    IplImage *out = alignedImage(sz, IPL_DEPTH_8U, img->nChannels, 8);
-    cvConvertScale(res, out, 255, 0);
+    IplImage *out = alignedImage(cvGetSize(img), IPL_DEPTH_8U, img->nChannels, 8);
+    cvConvertScale(img, out, 255, 0);
     cvSaveImage(fname, out, 0);
 }
 
@@ -217,6 +217,24 @@ static IplImage* combine(IplImage** maps, int nb)
     return mean;
 }
 
+IplImage* saliency(IplImage *img)
+{
+    IplImage *s1 = salmap(img, 0);
+    IplImage *s2 = salmap(resize(img, 0.8), 1);
+    IplImage *s3 = salmap(resize(img, 0.5), 1);
+    IplImage *s4 = salmap(resize(img, 0.25), 1);
+    IplImage *scales[] = { s1, s2, s3, s4 };
+    IplImage *sal = combine(scales, sizeof(scales)/sizeof(IplImage*));
+    IplImage *res = resize2(sal, cvGetSize(img));
+    cvReleaseImage(&s1);
+    cvReleaseImage(&s2);
+    cvReleaseImage(&s3);
+    cvReleaseImage(&s4);
+    cvReleaseImage(&sal);
+    return res;
+}
+
+#if 0
 int main(int argc, char **argv)
 {
 
@@ -227,30 +245,18 @@ int main(int argc, char **argv)
     printf("sal: %s\n", argv[1]);
     snprintf(labels, sizeof(labels), "saliency: %s", name(argv[1]));
     snprintf(labeli, sizeof(labeli), "img: %s", name(argv[1]));
+    IplImage *res = saliency(img);
 
-    IplImage *s1 = salmap(img, 0);
-    IplImage *s2 = salmap(resize(img, 0.8), 1);
-    IplImage *s3 = salmap(resize(img, 0.5), 1);
-    IplImage *s4 = salmap(resize(img, 0.25), 1);
-    IplImage *scales[] = { s1, s2, s3, s4 };
-    IplImage *res = combine(scales, sizeof(scales)/sizeof(IplImage*));
 
     if (argc < 3) {
     cvNamedWindow(labels, 1);
     cvMoveWindow(labels, img->width, 0);
     cvShowImage(labeli, img);
     cvShowImage(labels, res);
-    //cvShowImage("1st level saliency", s1);
-    //cvShowImage("2nd level saliency", s2);
-    //cvShowImage("3rd level saliency", s3);
-    //cvShowImage("4th level saliency", s4);
     cvWaitKey(0);
-    } else write2file(argv[2], res, cvGetSize(img));
+    } else write2file(argv[2], res);
     cvReleaseImage(&img);
-    cvReleaseImage(&s1);
-    cvReleaseImage(&s2);
-    cvReleaseImage(&s3);
-    cvReleaseImage(&s4);
     cvReleaseImage(&res);
     return 0;
 }
+#endif
