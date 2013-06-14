@@ -112,14 +112,10 @@ compute_finish:
     return 1 - exp(-dist/nb);
 }
 
-int main(int argc, char **argv)
+static IplImage *salmap(IplImage *img, int free_img)
 {
-
-    if (argc < 2) print_usage(argv);
-    //int plane_coeffs[] = {16, 4, 4}, i, *imgc, *c;
     int plane_coeffs[] = {2, 9, 5}, i, *imgc, *c;
     int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
-    IplImage *img = alignedImageFrom(argv[1], 8);
     CvSize isz = cvGetSize(img);
     int w = isz.width - 8 + 1, h = isz.height - 8 + 1, sz = w*h;
     CvSize salsz = {w, h};
@@ -127,11 +123,7 @@ int main(int argc, char **argv)
     int salstride = sal->widthStep/sizeof(float);
     kd_tree kdt;
     kd_node **nodes = malloc(w*sizeof(kd_node*));
-    char labels[1024], labeli[1024];
 
-    printf("sal: %s\n", argv[1]);
-    snprintf(labels, sizeof(labels), "saliency: %s", name(argv[1]));
-    snprintf(labeli, sizeof(labeli), "img: %s", name(argv[1]));
     memset(&kdt, 0, sizeof(kd_tree));
     prop_coeffs(img, plane_coeffs, &imgc);
     kdt_new_overlap(&kdt, imgc, sz, dim, 0.5, 8, w);
@@ -144,15 +136,79 @@ int main(int argc, char **argv)
         imgc += kdt.k;
     }
 
-    cvNamedWindow(labels, 1);
-    cvMoveWindow(labels, img->width, 0);
-    cvShowImage(labeli, img);
-    cvShowImage(labels, sal);
-    cvWaitKey(0);
-    cvReleaseImage(&img);
-    cvReleaseImage(&sal);
     kdt_free(&kdt);
     free(nodes);
     free(c);
+    if (free_img) cvReleaseImage(&img);
+    return sal;
+}
+
+static IplImage* resize(IplImage *img, float scale)
+{
+    CvSize sz = {img->width * scale, img->height * scale};
+    IplImage *ret = alignedImage(sz, img->depth, img->nChannels, 8);
+    cvResize(img, ret, CV_INTER_CUBIC);
+    return ret;
+}
+
+static IplImage *resize2(IplImage *img, CvSize sz)
+{
+    IplImage *ret = alignedImage(sz, img->depth, img->nChannels, 8);
+    cvResize(img, ret, CV_INTER_CUBIC);
+    return ret;
+}
+
+static IplImage* combine(IplImage** maps, int nb)
+{
+    int i;
+    IplImage *img = maps[0];
+    CvSize sz = cvGetSize(img);
+    IplImage *sum = alignedImage(sz, img->depth, img->nChannels, 8);
+    IplImage *mean = alignedImage(sz, img->depth, img->nChannels, 8);
+    cvXor(sum, sum, sum, NULL);
+    for (i = 0; i < nb; i++) {
+        IplImage *s1 = maps[i];
+        IplImage *r = resize2(s1, sz);
+        cvAcc(r, sum, NULL);
+        cvReleaseImage(&r);
+    }
+    cvConvertScale(sum, mean, 1.0/nb, 0);
+    cvReleaseImage(&sum);
+    return mean;
+}
+
+int main(int argc, char **argv)
+{
+
+    if (argc < 2) print_usage(argv);
+    IplImage *img = alignedImageFrom(argv[1], 8);
+    char labels[1024], labeli[1024];
+
+    printf("sal: %s\n", argv[1]);
+    snprintf(labels, sizeof(labels), "saliency: %s", name(argv[1]));
+    snprintf(labeli, sizeof(labeli), "img: %s", name(argv[1]));
+
+    IplImage *s1 = salmap(img, 0);
+    IplImage *s2 = salmap(resize(img, 0.8), 1);
+    IplImage *s3 = salmap(resize(img, 0.5), 1);
+    IplImage *s4 = salmap(resize(img, 0.25), 1);
+    IplImage *scales[] = { s1, s2, s3, s4 };
+    IplImage *res = combine(scales, sizeof(scales)/sizeof(IplImage*));
+
+    cvNamedWindow(labels, 1);
+    cvMoveWindow(labels, img->width, 0);
+    cvShowImage(labeli, img);
+    cvShowImage(labels, res);
+    //cvShowImage("1st level saliency", s1);
+    //cvShowImage("2nd level saliency", s2);
+    //cvShowImage("3rd level saliency", s3);
+    //cvShowImage("4th level saliency", s4);
+    cvWaitKey(0);
+    cvReleaseImage(&img);
+    cvReleaseImage(&s1);
+    cvReleaseImage(&s2);
+    cvReleaseImage(&s3);
+    cvReleaseImage(&s4);
+    cvReleaseImage(&res);
     return 0;
 }
