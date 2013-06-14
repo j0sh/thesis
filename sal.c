@@ -89,7 +89,7 @@ static float compute_dist(kd_tree *t, kd_node *n, int *v, int w)
     return dist;
 }
 
-static void swap2(float *best, kd_node **bestn)
+static void swap2(double *best, kd_node **bestn)
 {
     float d = best[0];
     best[0] = best[1];
@@ -100,38 +100,38 @@ static void swap2(float *best, kd_node **bestn)
     bestn[1] = n;
 }
 
+static void compute_node(kd_tree *t, double *best, kd_node **bestn,
+    kd_node *n, int *imgc, int *nb, double *dist, int w)
+{
+    double d = compute_dist(t, n, imgc, w);
+    *nb += n->nb;
+    *dist += d;
+    if (d < best[0]) {
+        bestn[0] = n;
+        best[0] = d;
+        if (best[0] < best[1]) swap2(best, bestn);
+    }
+}
+
 static float compute(kd_tree *t, kd_node **nodes, int *imgc,
     int i, int w)
 {
-    kd_node *n = kdt_query(t, imgc), *left, *top, *bestn[] = {n, n};
-    float dist = compute_dist(t, n, imgc, w), d, best[] = {dist,dist};
+    kd_node *n = kdt_query(t, imgc), *bestn[] = {n, n};
+    double dist = compute_dist(t, n, imgc, w), best[] = {dist, dist};
     int nb = n->nb, x = i % w, y = i / w;
 
     if (!x) goto try_top;
-    left = nodes[x-1];
-    d = compute_dist(t, left, imgc, w);
-    nb += left->nb;
-    dist += d;
-    if (d < best[0]) {
-        bestn[0] = left;
-        best[0] = d;
-        if (best[0] < best[1]) swap2(best, bestn);
-    }
+    compute_node(t, best, bestn, nodes[-1], imgc, &nb, &dist, w);
+    compute_node(t, best, bestn, nodes[-2], imgc, &nb, &dist, w);
 
 try_top:
     if (!y) goto compute_finish;
-    top = nodes[x];
-    d = compute_dist(t, top, imgc, w);
-    nb += top->nb;
-    dist += d;
-    if (d < best[0]) {
-        bestn[0] = top;
-        best[0] = d;
-        if (best[0] < best[1]) swap2(best, bestn);
-    }
+    compute_node(t, best, bestn, nodes[0], imgc, &nb, &dist, w);
+    compute_node(t, best, bestn, nodes[1], imgc, &nb, &dist, w);
 
 compute_finish:
-    nodes[x] = bestn[1];
+    nodes[0] = bestn[1];  // max-heap; this is the better match
+    nodes[1] = bestn[0];
     return 1 - exp(-dist/nb);
 }
 
@@ -145,7 +145,7 @@ static IplImage *salmap(IplImage *img, int free_img)
     IplImage *sal = cvCreateImage(salsz, IPL_DEPTH_32F, 1);
     int salstride = sal->widthStep/sizeof(float);
     kd_tree kdt;
-    kd_node **nodes = malloc(w*sizeof(kd_node*));
+    kd_node **nodes = malloc(w*2*sizeof(kd_node*));
 
     memset(&kdt, 0, sizeof(kd_tree));
     prop_coeffs(img, plane_coeffs, &imgc);
@@ -155,7 +155,7 @@ static IplImage *salmap(IplImage *img, int free_img)
     for (i = 0; i < sz; i++) {
         int x = i % w, y = i / w;
         float *data = (float*)sal->imageData + (y * salstride + x);
-        *data = compute(&kdt, nodes, imgc, i, w);
+        *data = compute(&kdt, nodes+x*2, imgc, i, w);
         imgc += kdt.k;
     }
 
