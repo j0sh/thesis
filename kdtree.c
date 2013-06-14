@@ -171,6 +171,35 @@ static int* calc_dimstats(int *points, int nb, int dim)
     return order;
 }
 
+void kdt_new_overlap(kd_tree *t, int *points, int nb_points, int k, float overlap, int kernsz, int stride)
+{
+    if (overlap < 0 || overlap > 1) {
+        printf("bad overlap\n");
+        exit(1);
+    }
+    if (overlap == 1) return kdt_new(t, points, nb_points, k);
+    int i, j, toskip = kernsz - overlap * kernsz;
+    int old_nb_points = nb_points;
+    nb_points = nb_points/toskip + 1;
+    t->points = malloc(nb_points*sizeof(int*));
+    t->map = malloc(old_nb_points*sizeof(kd_node*));
+    for (i = j = 0; i < old_nb_points; i += toskip) {
+        if (i % stride < (i-1) % stride) { // wraparound
+            i += toskip*stride;
+            continue;
+        }
+        t->points[j++] = points + i*k;
+    }
+    nb_points = j - 1;
+    t->nodes = malloc(nb_points*sizeof(kd_node));
+    t->nb_nodes = 0;
+    t->start = points;
+    t->end = points + old_nb_points * k;
+    t->k = k;
+    t->order = calc_dimstats(points, old_nb_points, k);
+    t->root = kdt_new_in(t, t->points, nb_points, 0);
+}
+
 void kdt_new(kd_tree *t, int *points, int nb_points, int k)
 {
     int i;
