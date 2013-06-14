@@ -18,7 +18,7 @@
 
 static void print_usage(char **argv)
 {
-    printf("Usage: %s <path>\n", argv[0]);
+    printf("Usage: %s <path> [outfile]\n", argv[0]);
     exit(1);
 }
 
@@ -64,7 +64,7 @@ static double l2_color(int *a, int *b, int k)
         int diff = a[i] - b[i];
         dist += diff*diff;
     }
-    return sqrt(dist)/sqrt(255*255*k);
+    return sqrt(dist);///sqrt(255*255*k);
 }
 
 static double l2_pos(kd_tree *t, int *a, int *b, int w)
@@ -84,7 +84,7 @@ static float compute_dist(kd_tree *t, kd_node *n, int *v, int w)
         int *u = n->value[i];
         double dcolor = l2_color(u, v, t->k);
         double dpos = l2_pos(t, u, v, w);
-        dist += dcolor / (1 + dpos);
+        dist += dcolor / (1 + t->k*dpos);
     }
     return dist;
 }
@@ -205,14 +205,15 @@ static IplImage* combine(IplImage** maps, int nb)
         cvReleaseImage(&r);
     }
     cvConvertScale(sum, mean, 1.0/nb, 0);
-    cvThreshold(mean, thr, 0.08, 1.0, CV_THRESH_BINARY);
-    cvSmooth(thr, thr, CV_GAUSSIAN, 9, 9, 0, 0);
+    cvThreshold(mean, thr, 0.85, 1.0, CV_THRESH_TOZERO);
+    cvSmooth(thr, thr, CV_GAUSSIAN, 25, 25, 0, 0);
     cvXor(sum, sum, sum, NULL);
     cvAcc(mean, sum, NULL);
     cvAcc(thr, sum, NULL);
-    //cvConvertScale(sum, mean, 0.5, 0);
+    cvConvertScale(sum, mean, 0.5, 0);
     cvReleaseImage(&sum);
     cvReleaseImage(&thr);
+    //cvThreshold(mean, mean, 0.8, 1.0, CV_THRESH_TOZERO);
     return mean;
 }
 
