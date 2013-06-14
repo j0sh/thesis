@@ -89,11 +89,22 @@ static float compute_dist(kd_tree *t, kd_node *n, int *v, int w)
     return dist;
 }
 
+static void swap2(float *best, kd_node **bestn)
+{
+    float d = best[0];
+    best[0] = best[1];
+    best[1] = d;
+
+    kd_node *n = bestn[0];
+    bestn[0] = bestn[1];
+    bestn[1] = n;
+}
+
 static float compute(kd_tree *t, kd_node **nodes, int *imgc,
     int i, int w)
 {
-    kd_node *n = kdt_query(t, imgc), *left, *top;
-    float dist = compute_dist(t, n, imgc, w), d, best = dist;
+    kd_node *n = kdt_query(t, imgc), *left, *top, *bestn[] = {n, n};
+    float dist = compute_dist(t, n, imgc, w), d, best[] = {dist,dist};
     int nb = n->nb, x = i % w, y = i / w;
 
     if (!x) goto try_top;
@@ -101,9 +112,10 @@ static float compute(kd_tree *t, kd_node **nodes, int *imgc,
     d = compute_dist(t, left, imgc, w);
     nb += left->nb;
     dist += d;
-    if (d < best) {
-        n = left;
-        best = d;
+    if (d < best[0]) {
+        bestn[0] = left;
+        best[0] = d;
+        if (best[0] < best[1]) swap2(best, bestn);
     }
 
 try_top:
@@ -112,13 +124,14 @@ try_top:
     d = compute_dist(t, top, imgc, w);
     nb += top->nb;
     dist += d;
-    if (d < best) {
-        n = top;
-        best = d;
+    if (d < best[0]) {
+        bestn[0] = top;
+        best[0] = d;
+        if (best[0] < best[1]) swap2(best, bestn);
     }
 
 compute_finish:
-    nodes[x] = n;
+    nodes[x] = bestn[1];
     return 1 - exp(-dist/nb);
 }
 
