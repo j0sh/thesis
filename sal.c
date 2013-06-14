@@ -44,6 +44,15 @@ static IplImage *alignedImageFrom(char *file, int align)
     return img;
 }
 
+static char *name(char *fname)
+{
+    int i, len = strlen(fname);
+    for (i = len-1; i >= 0; i--) {
+        if (fname[i] == '/') return fname+i+1;
+    }
+    return fname;
+}
+
 static int best_match_idx(int *coeffs, kd_node *n, int k)
 {
     int i, j, *u, *v, **p = n->value, best = INT_MAX, idx = -1;
@@ -64,42 +73,54 @@ static int best_match_idx(int *coeffs, kd_node *n, int k)
     return idx;
 }
 
-int compute_dist(kd_node *n, int idx, int k)
+static double l2_color(int *a, int *b, int k)
+{
+    int i, dist = 0;
+    for (i = 0; i < k; i++) {
+        int diff = a[i] - b[i];
+        dist += diff*diff;
+    }
+    return sqrt(dist);
+}
+
+static double l2_pos(kd_tree *t, int *a, int *b, int w)
+{
+    int ap = (a - t->start)/t->k;
+    int bp = (b - t->start)/t->k;
+    int ax = ap % w, ay = ap / w;
+    int bx = bp % w, by = bp / w;
+    int dx = ax - bx, dy = ay - by;
+    return sqrt(dx*dx + dy*dy);
+}
+
+static float compute_dist(kd_tree *t, kd_node *n, int idx, int w)
 {
     int *v = n->value[idx];
-    int i, j, dist = 0;
+    int i; double dist = 0;
     for (i = 0; i < n->nb; i++) {
         int *u = n->value[i];
         if (i == idx) continue;
-        for (j = 0; j < k; j++) {
-            int diff = v[j] - u[j];
-            dist += sqrt(diff * diff);
-        }
+        int dcolor = l2_color(u, v, t->k);
+        int dpos = l2_pos(t, u, v, w);
+        //dist += dcolor/360.0;
+        dist += dcolor / (1 + 3*dpos);
     }
-    return dist/n->nb;
-}
-
-static char *name(char *fname)
-{
-    int i, len = strlen(fname);
-    for (i = len-1; i >= 0; i--) {
-        if (fname[i] == '/') return fname+i+1;
-    }
-    return fname;
+    return 1 - exp(-dist/n->nb);
 }
 
 int main(int argc, char **argv)
 {
 
     if (argc < 2) print_usage(argv);
+    //int plane_coeffs[] = {16, 4, 4}, i, *imgc, *c;
     int plane_coeffs[] = {2, 9, 5}, i, *imgc, *c;
     int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     IplImage *img = alignedImageFrom(argv[1], 8);
     CvSize isz = cvGetSize(img);
     int w = isz.width - 8 + 1, h = isz.height - 8 + 1, sz = w*h;
     CvSize salsz = {w, h};
-    IplImage *sal = cvCreateImage(salsz, IPL_DEPTH_32S, 1);
-    int salstride = sal->widthStep/sizeof(int);
+    IplImage *sal = cvCreateImage(salsz, IPL_DEPTH_32F, 1);
+    int salstride = sal->widthStep/sizeof(float);
     kd_tree kdt;
     char labels[1024], labeli[1024];
 
@@ -108,19 +129,20 @@ int main(int argc, char **argv)
     snprintf(labeli, sizeof(labeli), "img: %s", name(argv[1]));
     memset(&kdt, 0, sizeof(kd_tree));
     prop_coeffs(img, plane_coeffs, &imgc);
-    kdt_new(&kdt, imgc, sz, dim);
+    kdt_new_overlap(&kdt, imgc, sz, dim, 0.5, 8, w);
     c = imgc;
 
     for (i = 0; i < sz; i++) {
         int x = i % w, y = i / w;
-        int *data = (int*)sal->imageData + (y * salstride + x);
+        float *data = (float*)sal->imageData + (y * salstride + x);
         kd_node *n = kdt_query(&kdt, imgc);
         int idx = best_match_idx(imgc, n, kdt.k);
-        int score = compute_dist(n, idx, kdt.k);
-        *data = score;
+        *data = compute_dist(&kdt, n, idx, w);
         imgc += kdt.k;
     }
 
+    cvNamedWindow(labels, 1);
+    cvMoveWindow(labels, img->width, 0);
     cvShowImage(labeli, img);
     cvShowImage(labels, sal);
     cvWaitKey(0);
