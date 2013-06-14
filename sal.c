@@ -181,6 +181,14 @@ static IplImage *resize2(IplImage *img, CvSize sz)
     return ret;
 }
 
+static void write2file(char *fname, IplImage *img, CvSize sz)
+{
+    IplImage *res = resize2(img, sz);
+    IplImage *out = alignedImage(sz, IPL_DEPTH_8U, img->nChannels, 8);
+    cvConvertScale(res, out, 255, 0);
+    cvSaveImage(fname, out, 0);
+}
+
 static IplImage* combine(IplImage** maps, int nb)
 {
     int i;
@@ -226,6 +234,7 @@ int main(int argc, char **argv)
     IplImage *scales[] = { s1, s2, s3, s4 };
     IplImage *res = combine(scales, sizeof(scales)/sizeof(IplImage*));
 
+    if (argc < 3) {
     cvNamedWindow(labels, 1);
     cvMoveWindow(labels, img->width, 0);
     cvShowImage(labeli, img);
@@ -235,6 +244,7 @@ int main(int argc, char **argv)
     //cvShowImage("3rd level saliency", s3);
     //cvShowImage("4th level saliency", s4);
     cvWaitKey(0);
+    } else write2file(argv[2], res, cvGetSize(img));
     cvReleaseImage(&img);
     cvReleaseImage(&s1);
     cvReleaseImage(&s2);
