@@ -188,6 +188,7 @@ static IplImage* combine(IplImage** maps, int nb)
     CvSize sz = cvGetSize(img);
     IplImage *sum = alignedImage(sz, img->depth, img->nChannels, 8);
     IplImage *mean = alignedImage(sz, img->depth, img->nChannels, 8);
+    IplImage *thr = alignedImage(sz, img->depth, img->nChannels, 8);
     cvXor(sum, sum, sum, NULL);
     for (i = 0; i < nb; i++) {
         IplImage *s1 = maps[i];
@@ -196,7 +197,14 @@ static IplImage* combine(IplImage** maps, int nb)
         cvReleaseImage(&r);
     }
     cvConvertScale(sum, mean, 1.0/nb, 0);
+    cvThreshold(mean, thr, 0.08, 1.0, CV_THRESH_BINARY);
+    cvSmooth(thr, thr, CV_GAUSSIAN, 9, 9, 0, 0);
+    cvXor(sum, sum, sum, NULL);
+    cvAcc(mean, sum, NULL);
+    cvAcc(thr, sum, NULL);
+    //cvConvertScale(sum, mean, 0.5, 0);
     cvReleaseImage(&sum);
+    cvReleaseImage(&thr);
     return mean;
 }
 
