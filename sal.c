@@ -11,6 +11,10 @@
 
 #include "kdtree.h"
 #include "prop.h"
+ 
+#define XY_TO_INT(x, y) (((y) << 16) | (x))
+#define XY_TO_X(x) ((x)&((1<<16)-1))
+#define XY_TO_Y(y) ((y)>>16)
 
 static void print_usage(char **argv)
 {
@@ -53,26 +57,6 @@ static char *name(char *fname)
     return fname;
 }
 
-static int best_match_idx(int *coeffs, kd_node *n, int k)
-{
-    int i, j, *u, *v, **p = n->value, best = INT_MAX, idx = -1;
-    for (i = 0; i < n->nb; i++) {
-        int dist = 0;
-        u = coeffs;
-        v = *p++;
-        for (j = 0; j < k; j++) {
-            int a = *u++;
-            int b = *v++;
-            dist += (a - b)*(a - b);
-        }
-        if (dist < best) {
-            best = dist;
-            idx = i;
-        }
-    }
-    return idx;
-}
-
 static double l2_color(int *a, int *b, int k)
 {
     int i, dist = 0;
@@ -93,19 +77,40 @@ static double l2_pos(kd_tree *t, int *a, int *b, int w)
     return sqrt(dx*dx + dy*dy);
 }
 
-static float compute_dist(kd_tree *t, kd_node *n, int idx, int w)
+static float compute_dist(kd_tree *t, kd_node *n, int *v, int w)
 {
-    int *v = n->value[idx];
     int i; double dist = 0;
     for (i = 0; i < n->nb; i++) {
         int *u = n->value[i];
-        if (i == idx) continue;
         int dcolor = l2_color(u, v, t->k);
         int dpos = l2_pos(t, u, v, w);
         //dist += dcolor/360.0;
         dist += dcolor / (1 + 3*dpos);
     }
-    return 1 - exp(-dist/n->nb);
+    return dist;
+}
+
+static float compute(kd_tree *t, kd_node **nodes, int *imgc,
+    int i, int w)
+{
+    kd_node *n = kdt_query(t, imgc), *left, *top;
+    float dist = compute_dist(t, n, imgc, w);
+    int nb = n->nb, x = i % w, y = i / w;
+
+    if (!x) goto try_top;
+    left = nodes[x-1];
+    dist += compute_dist(t, left, imgc, w);
+    nb += left->nb;
+
+try_top:
+    if (!y) goto compute_finish;
+    top = nodes[x];
+    dist += compute_dist(t, top, imgc, w);
+    nb += top->nb;
+
+compute_finish:
+    nodes[x] = n;
+    return 1 - exp(-dist/nb);
 }
 
 int main(int argc, char **argv)
@@ -122,6 +127,7 @@ int main(int argc, char **argv)
     IplImage *sal = cvCreateImage(salsz, IPL_DEPTH_32F, 1);
     int salstride = sal->widthStep/sizeof(float);
     kd_tree kdt;
+    kd_node **nodes = malloc(w*sizeof(kd_node*));
     char labels[1024], labeli[1024];
 
     printf("sal: %s\n", argv[1]);
@@ -135,9 +141,7 @@ int main(int argc, char **argv)
     for (i = 0; i < sz; i++) {
         int x = i % w, y = i / w;
         float *data = (float*)sal->imageData + (y * salstride + x);
-        kd_node *n = kdt_query(&kdt, imgc);
-        int idx = best_match_idx(imgc, n, kdt.k);
-        *data = compute_dist(&kdt, n, idx, w);
+        *data = compute(&kdt, nodes, imgc, i, w);
         imgc += kdt.k;
     }
 
@@ -149,6 +153,7 @@ int main(int argc, char **argv)
     cvReleaseImage(&img);
     cvReleaseImage(&sal);
     kdt_free(&kdt);
+    free(nodes);
     free(c);
     return 0;
 }
