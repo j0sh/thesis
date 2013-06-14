@@ -64,7 +64,7 @@ static double l2_color(int *a, int *b, int k)
         int diff = a[i] - b[i];
         dist += diff*diff;
     }
-    return sqrt(dist);
+    return sqrt(dist)/sqrt(255*255*k);
 }
 
 static double l2_pos(kd_tree *t, int *a, int *b, int w)
@@ -82,10 +82,9 @@ static float compute_dist(kd_tree *t, kd_node *n, int *v, int w)
     int i; double dist = 0;
     for (i = 0; i < n->nb; i++) {
         int *u = n->value[i];
-        int dcolor = l2_color(u, v, t->k);
-        int dpos = l2_pos(t, u, v, w);
-        //dist += dcolor/360.0;
-        dist += dcolor / (1 + 3*dpos);
+        double dcolor = l2_color(u, v, t->k);
+        double dpos = l2_pos(t, u, v, w);
+        dist += dcolor / (1 + dpos);
     }
     return dist;
 }
