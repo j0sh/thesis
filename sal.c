@@ -93,19 +93,29 @@ static float compute(kd_tree *t, kd_node **nodes, int *imgc,
     int i, int w)
 {
     kd_node *n = kdt_query(t, imgc), *left, *top;
-    float dist = compute_dist(t, n, imgc, w);
+    float dist = compute_dist(t, n, imgc, w), d, best = dist;
     int nb = n->nb, x = i % w, y = i / w;
 
     if (!x) goto try_top;
     left = nodes[x-1];
-    dist += compute_dist(t, left, imgc, w);
+    d = compute_dist(t, left, imgc, w);
     nb += left->nb;
+    dist += d;
+    if (d < best) {
+        n = left;
+        best = d;
+    }
 
 try_top:
     if (!y) goto compute_finish;
     top = nodes[x];
-    dist += compute_dist(t, top, imgc, w);
+    d = compute_dist(t, top, imgc, w);
     nb += top->nb;
+    dist += d;
+    if (d < best) {
+        n = top;
+        best = d;
+    }
 
 compute_finish:
     nodes[x] = n;
