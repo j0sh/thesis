@@ -8,6 +8,15 @@ function runsal {
     done
 }
 
+function runsal2 {
+    imgs=`cd $1;ls *.jpg`
+    for f in $imgs
+    do
+        ./a.out $1/$f
+    done
+}
+
+
 function r {
     prefix="/media/Grains/saliency/learning/Image"
     ./a.out $prefix/$1
@@ -27,5 +36,6 @@ r "0/0_24_24209.jpg" # 440
 
 # from "saliency detection: a spectral residual approach", x. hou etal
 #runsal "/media/Grains/saliency/cvpr07supp/in" "/media/Grains/saliency/cvpr07supp/results"
+runsal2 "/media/Grains/saliency/learning/Image/6"
 
-g
+#g

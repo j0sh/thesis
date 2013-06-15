@@ -189,6 +189,34 @@ static void write2file(char *fname, IplImage *img)
     cvSaveImage(fname, out, 0);
 }
 
+static float attended_scale(IplImage *thresh, int x, int y)
+{
+    int i;
+    for (i = 1; i < 64; i+= 2) {
+        CvRect r = {(x-i/2)*(x >= i/2), (y-i/2)*(y>=i/2), i, i};
+        cvSetImageROI(thresh, r);
+        int c = i*i - cvCountNonZero(thresh);
+        if (!c) continue;
+        return c/(float)(i*i);
+    }
+    return 0.0;
+}
+
+static IplImage* calc_distmap(IplImage *thresh)
+{
+    IplImage *distmap = cvCreateImage(cvGetSize(thresh), thresh->depth, 1);
+    int x, y;
+    float *data; int stride = thresh->widthStep/sizeof(float);
+    for (y = 0; y < thresh->height; y++) {
+        data = (float*)distmap->imageData + y * stride;
+        for (x = 0; x < thresh->width; x++) {
+            data[x] = attended_scale(thresh, x, y);
+        }
+    }
+    cvResetImageROI(thresh);
+    return distmap;
+}
+
 static IplImage* combine(IplImage** maps, int nb)
 {
     int i;
@@ -196,7 +224,7 @@ static IplImage* combine(IplImage** maps, int nb)
     CvSize sz = cvGetSize(img);
     IplImage *sum = alignedImage(sz, img->depth, img->nChannels, 8);
     IplImage *mean = alignedImage(sz, img->depth, img->nChannels, 8);
-    IplImage *thr = alignedImage(sz, img->depth, img->nChannels, 8);
+    IplImage *thr = alignedImage(sz, img->depth, 1, 8);
     cvXor(sum, sum, sum, NULL);
     for (i = 0; i < nb; i++) {
         IplImage *s1 = maps[i];
@@ -205,15 +233,11 @@ static IplImage* combine(IplImage** maps, int nb)
         cvReleaseImage(&r);
     }
     cvConvertScale(sum, mean, 1.0/nb, 0);
-    cvThreshold(mean, thr, 0.85, 1.0, CV_THRESH_TOZERO);
-    cvSmooth(thr, thr, CV_GAUSSIAN, 25, 25, 0, 0);
-    cvXor(sum, sum, sum, NULL);
-    cvAcc(mean, sum, NULL);
-    cvAcc(thr, sum, NULL);
-    cvConvertScale(sum, mean, 0.5, 0);
+    cvThreshold(mean, thr, 0.9, 0.0, CV_THRESH_TOZERO_INV);
+    IplImage *dist = calc_distmap(thr);
+    cvMul(dist, mean, mean, 1);
     cvReleaseImage(&sum);
     cvReleaseImage(&thr);
-    //cvThreshold(mean, mean, 0.8, 1.0, CV_THRESH_TOZERO);
     return mean;
 }
 
