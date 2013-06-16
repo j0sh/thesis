@@ -78,6 +78,13 @@ static double l2_pos(kd_tree *t, int *a, int *b, int w)
     return sqrt(dx*dx + dy*dy);
 }
 
+static double clamp(double d)
+{
+    if (d > 1) return 1.0;
+    if (d < 0) return 0;
+    return d;
+}
+
 static float compute_dist(kd_tree *t, kd_node *n, int *v, int w)
 {
     int i; double dist = 0;
@@ -184,21 +191,38 @@ static IplImage *resize2(IplImage *img, CvSize sz)
 
 static void write2file(char *fname, IplImage *img)
 {
-    IplImage *out = alignedImage(cvGetSize(img), IPL_DEPTH_8U, img->nChannels, 8);
+    IplImage *out = cvCreateImage(cvGetSize(img), IPL_DEPTH_8U, img->nChannels);
     cvConvertScale(img, out, 255, 0);
     cvSaveImage(fname, out, 0);
+    cvReleaseImage(&out);
 }
 
 static float attended_scale(IplImage *thresh, int x, int y)
 {
-    int i;
-    for (i = 1; i < 64; i+= 2) {
-        CvRect r = {(x-i/2)*(x >= i/2), (y-i/2)*(y>=i/2), i, i};
-        cvSetImageROI(thresh, r);
-        int c = i*i - cvCountNonZero(thresh);
-        if (!c) continue;
-        return c/(float)(i*i);
+    int d = 32;
+    double r = d/2;
+    if (x+r >= thresh->width) return 0.0; // lazy; fix later
+    if (y+r >= thresh->height) return 0.0;
+
+    int s = thresh->widthStep/sizeof(float), a, b;
+    int startx = abs((x - r)), starty = abs((y - r));
+    float *f = (float*)thresh->imageData + (starty*s + startx);
+    double dist = 0;
+    int count = 0;
+    for (a = 0; a < d; a++) {
+        float *g = f + s*a;
+        for (b = 0; b < d; b++) {
+            double ed = (a - r)*(a - r) + (b - r)*(b - r);
+            if (ed < r*r) {
+                if (*g > 0) {
+                    dist += sqrt(ed);
+                    count++;
+                }
+            }
+            g++;
+        }
     }
+    if (count) return clamp((count*dist)/((r*r)*sqrt(2*r*r)));
     return 0.0;
 }
 
@@ -213,7 +237,6 @@ static IplImage* calc_distmap(IplImage *thresh)
             data[x] = attended_scale(thresh, x, y);
         }
     }
-    cvResetImageROI(thresh);
     return distmap;
 }
 
@@ -233,11 +256,12 @@ static IplImage* combine(IplImage** maps, int nb)
         cvReleaseImage(&r);
     }
     cvConvertScale(sum, mean, 1.0/nb, 0);
-    cvThreshold(mean, thr, 0.9, 0.0, CV_THRESH_TOZERO_INV);
+    cvThreshold(mean, thr, 0.96, 0.0, CV_THRESH_TOZERO);
     IplImage *dist = calc_distmap(thr);
     cvMul(dist, mean, mean, 1);
     cvReleaseImage(&sum);
     cvReleaseImage(&thr);
+    cvReleaseImage(&dist);
     return mean;
 }
 
