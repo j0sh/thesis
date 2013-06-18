@@ -154,6 +154,7 @@ static IplImage *salmap(IplImage *img, int free_img)
     int salstride = sal->widthStep/sizeof(float);
     kd_tree kdt;
     kd_node **nodes = malloc(w*2*sizeof(kd_node*));
+    double min, max;
 
     memset(&kdt, 0, sizeof(kd_tree));
     prop_coeffs(img, plane_coeffs, &imgc);
@@ -171,6 +172,10 @@ static IplImage *salmap(IplImage *img, int free_img)
     free(nodes);
     free(c);
     if (free_img) cvReleaseImage(&img);
+    cvMinMaxLoc(sal, &min, &max, NULL, NULL, NULL);
+    CvScalar scalar = cvRealScalar(-min);
+    cvAddS(sal, scalar, sal, NULL);
+    cvConvertScale(sal, sal, 1.0/(max - min), 0);
     return sal;
 }
 
@@ -201,8 +206,8 @@ static float attended_scale(IplImage *thresh, int x, int y)
 {
     int d = 32;
     double r = d/2;
-    if (x+r >= thresh->width) return 0.0; // lazy; fix later
-    if (y+r >= thresh->height) return 0.0;
+    if (x+r >= thresh->width) return 0.5; // lazy; fix later
+    if (y+r >= thresh->height) return 0.5;
 
     int s = thresh->widthStep/sizeof(float), a, b;
     int startx = abs((x - r)), starty = abs((y - r));
@@ -222,7 +227,7 @@ static float attended_scale(IplImage *thresh, int x, int y)
             g++;
         }
     }
-    if (count) return clamp((count*dist)/((r*r)*sqrt(2*r*r)));
+    if (count) return (count*dist)/((r*r)*sqrt(2*r*r));
     return 0.0;
 }
 
@@ -243,6 +248,7 @@ static IplImage* calc_distmap(IplImage *thresh)
 static IplImage* combine(IplImage** maps, int nb)
 {
     int i;
+    double min, max;
     IplImage *img = maps[0];
     CvSize sz = cvGetSize(img);
     IplImage *sum = alignedImage(sz, img->depth, img->nChannels, 8);
@@ -256,12 +262,21 @@ static IplImage* combine(IplImage** maps, int nb)
         cvReleaseImage(&r);
     }
     cvConvertScale(sum, mean, 1.0/nb, 0);
-    cvThreshold(mean, thr, 0.96, 0.0, CV_THRESH_TOZERO);
-    IplImage *dist = calc_distmap(thr);
-    cvMul(dist, mean, mean, 1);
+    cvXor(sum, sum, sum, NULL);
+    for (i = 0; i < 10; i++) {
+        cvThreshold(mean, thr, 0.5 + 0.1*i, 0.0, CV_THRESH_TOZERO);
+        IplImage *dist = calc_distmap(thr);
+        cvAcc(dist, sum, NULL);
+        cvReleaseImage(&dist);
+    }
+    cvConvertScale(sum, sum, 1.0/10, 0);
+    cvMinMaxLoc(sum, &min, &max, NULL, NULL, NULL);
+    CvScalar scalar = cvRealScalar(-min);
+    cvAddS(sum, scalar, sum, NULL);
+    cvConvertScale(sum, sum, 1.0/(max - min), 0);
+    cvMul(sum, mean, mean, 1);
     cvReleaseImage(&sum);
     cvReleaseImage(&thr);
-    cvReleaseImage(&dist);
     return mean;
 }
 
