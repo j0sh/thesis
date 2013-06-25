@@ -54,7 +54,10 @@ r "6/6_187_187089.jpg" # shack
 }
 
 # from "saliency detection: a spectral residual approach", x. hou etal
+#runsal "/media/Grains/saliency/learning/achanta-dataset/images" "/media/Grains/saliency/learning/achanta-dataset/results-ftsrd"
+#runsal "/media/Grains/saliency/learning/achanta-dataset/images" "/media/Grains/saliency/learning/achanta-dataset/results-ours-1.00"
 #runsal "/media/Grains/saliency/cvpr07supp/in" "/media/Grains/saliency/cvpr07supp/results"
+#runsal "/media/Grains/saliency/cvpr07supp/in" "/media/Grains/saliency/cvpr07supp/results-ftsrd"
 #runsal2 "/media/Grains/saliency/cvpr07supp/in"
 #runsal2 "/media/Grains/saliency/learning/Image/6"
 #runsal2 "/media/Grains/saliency/learning/Image/7"
