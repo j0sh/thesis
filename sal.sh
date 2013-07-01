@@ -18,12 +18,13 @@ function runsal2 {
 
 
 function r {
-    prefix="/media/Grains/saliency/learning/Image"
+    prefix="Grains/saliency/learning/Image"
     ./a.out $prefix/$1
 }
 
 # some commonly exhibited images
 function g {
+r "4/4_129_129095.jpg" # moses figurine
 r "6/6_186_186022.jpg" # bird on fence
 r "1/1_45_45397.jpg" # leaf on fence
 r "8/9_210088.jpg" # fish
@@ -55,13 +56,17 @@ r "6/6_187_187089.jpg" # shack
 
 # from "saliency detection: a spectral residual approach", x. hou etal
 #runsal "/media/Grains/saliency/learning/achanta-dataset/images" "/media/Grains/saliency/learning/achanta-dataset/results-ftsrd"
-#runsal "/media/Grains/saliency/learning/achanta-dataset/images" "/media/Grains/saliency/learning/achanta-dataset/results-ours-1.00"
+#runsal "Grains/saliency/learning/achanta-dataset/images" "Grains/saliency/learning/achanta-dataset/results-sbar"
 #runsal "/media/Grains/saliency/cvpr07supp/in" "/media/Grains/saliency/cvpr07supp/results"
 #runsal "/media/Grains/saliency/cvpr07supp/in" "/media/Grains/saliency/cvpr07supp/results-ftsrd"
-#runsal2 "/media/Grains/saliency/cvpr07supp/in"
+runsal2 "Grains/saliency/cvpr07supp/in"
 #runsal2 "/media/Grains/saliency/learning/Image/6"
 #runsal2 "/media/Grains/saliency/learning/Image/7"
 
-g
+#r "0/0_9_9990.jpg" # saltshakers
+#r "1/1_45_45397.jpg" # leaf on fence
+#r "8/9_210088.jpg" # fish
+
+#g
 
 #h
