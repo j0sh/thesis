@@ -1,0 +1,1302 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"  
+  "http://www.w3.org/TR/html4/loose.dtd">  
+<html > 
+<head><title></title> 
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"> 
+<meta name="generator" content="TeX4ht (http://www.cse.ohio-state.edu/~gurari/TeX4ht/)"> 
+<meta name="originator" content="TeX4ht (http://www.cse.ohio-state.edu/~gurari/TeX4ht/)"> 
+<!-- html --> 
+<meta name="src" content="saliency.tex"> 
+<meta name="date" content="2013-06-30 20:56:00"> 
+<link rel="stylesheet" type="text/css" href="saliency.css"> 
+</head><body 
+>
+   <h3 class="sectionHead"><span class="titlemark">1   </span> <a 
+ id="x1-10001"></a>Saliency Detection using Nearest-Neighbors</h3>
+<!--l. 15--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.1   </span> <a 
+ id="x1-20001.1"></a>Preamble</h4>
+<!--l. 15--><p class="noindent" >This work describes a saliency-detection algorithm inspired by <span class="cite">[<a 
+href="#XGofermanSaliency">2</a>]</span> and using the
+kd-tree algorithm of <span class="cite">[<a 
+href="#XHeKdTree">3</a>]</span> for approximate nearest-neighbor search. The code can
+be found <a 
+href="https://github.com/j0sh/thesis/blob/master/sal.c" >here</a>.
+<!--l. 17--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-20011"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 18--><p class="noindent" ><img 
+src="images/58.jpg" alt="PIC"  
+width="652.4375pt" height="100.375pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;1: </span><span  
+class="content">Saliency detection results on a particularly difficult image. Left
+to right: Original image, our approach, <span class="cite">[<a 
+href="#XIttiSaliency">5</a>]</span>, <span class="cite">[<a 
+href="#XHouSpectralResidual">4</a>]</span>, <span class="cite">[<a 
+href="#XAchantaFTSRD">1</a>]</span></span></div><!--tex4ht:label?: x1-20011 -->
+                                                                     
+
+                                                                     
+<!--l. 21--><p class="indent" >   </div><hr class="endfigure">
+   <h4 class="subsectionHead"><span class="titlemark">1.2   </span> <a 
+ id="x1-30001.2"></a>Introduction</h4>
+<!--l. 23--><p class="noindent" >In &#8221;Context-Aware Saliency Detection,&#8221; <span class="cite">[<a 
+href="#XGofermanSaliency">2</a>]</span> proposes an algorithm to calculate
+the saliency of an object and its surrounding context by computing the distance
+(in color and space) to the nearest neighbors of an image patch. Salient
+objects would be distant from its neighbors, in similarity and space. A
+related approach is taken here, although details differ &#8211; primarily in the
+addition of a tempering step (and omitting the corresponding &#8221;attendance&#8221;
+formula from <span class="cite">[<a 
+href="#XGofermanSaliency">2</a>]</span>). The basic propagation algorithm from <span class="cite">[<a 
+href="#XHeKdTree">3</a>]</span> is re-used for
+nearest-neighbor search. Since each kd-tree leaf contains up to 8 patches, a
+single query down the kd-tree yields up to 8 neighbors. By propagating
+the best two nodes from the top and left (found during earlier queries),
+up to 40 neighbors can be compared &#8211; 8 for the current patch, and 16
+each from the top and left. Comparing 40 patches is computationally
+expensive, but fewer patches lead to lower accuracy. Figure <a 
+href="#x1-5001r1">4a<!--tex4ht:ref: sal:roc-overlap-prop --></a> shows
+results for 40-neighbor (propagated) and 8-neighbor (non-propagated)
+comparisons.
+<!--l. 25--><p class="indent" >   Section <a 
+href="#x1-40001.3">1.3<!--tex4ht:ref: sal:algorithm --></a> describes the algorithm, while Section <a 
+href="#x1-50001.4">1.4<!--tex4ht:ref: sal:propoverlaptempering --></a> justifies the parametric
+choices made with regards to propagation and overlap. Quantitative comparisons
+to related work are made in Section <a 
+href="#x1-60001.5">1.5<!--tex4ht:ref: sal:relatedcomp --></a>, and weaknesses discussed in
+<a 
+href="#x1-70001.6">1.6<!--tex4ht:ref: sal:weakness --></a>.
+<!--l. 27--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.3   </span> <a 
+ id="x1-40001.3"></a>Algorithm</h4>
+<!--l. 29--><p class="noindent" >First we can begin by defining the distance formula, which incorpoates color and
+positional information from the kd-tree query:
+                                                                     
+
+                                                                     
+<table 
+class="align">
+                    <tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">d</span>(<span 
+class="cmmi-10x-x-109">p</span><sub><span 
+class="cmmi-8">i</span></sub><span 
+class="cmmi-10x-x-109">,p</span><sub><span 
+class="cmmi-8">j</span></sub>)</td>                    <td 
+class="align-even"> = <img 
+src="saliency0x.png" alt="-----dcolor(pi,pj)----
+1 + c&sdot;dposition(pi,pj)"  class="frac" align="middle"></td>                                        <td 
+class="align-label"><a 
+ id="x1-4001r1"></a>(1)                    </td></tr></table>
+<span 
+class="cmmi-10x-x-109">c </span>is the dimensionality of the patch vector, here <span 
+class="cmmi-10x-x-109">c </span>= 16 following the <a 
+href="http://j0sh.github.io/thesis/kdtree/" >kd-tree
+construction</a>. <span 
+class="cmmi-10x-x-109">d</span><sub><span 
+class="cmmi-8">color</span></sub> is the <span 
+class="cmmi-10x-x-109">L</span><sub><span 
+class="cmr-8">2</span></sub> distance (in quantized RGB-WHT space) between
+patches <span 
+class="cmmi-10x-x-109">p</span><sub><span 
+class="cmmi-8">i</span></sub> and <span 
+class="cmmi-10x-x-109">p</span><sub><span 
+class="cmmi-8">j</span></sub>, while <span 
+class="cmmi-10x-x-109">d</span><sub><span 
+class="cmmi-8">position</span></sub> indicates the <span 
+class="cmmi-10x-x-109">L</span><sub><span 
+class="cmr-8">2</span></sub> distance between the two
+patches.
+<!--l. 35--><p class="indent" >   We repeat the distance calculation for each patch <span 
+class="cmmi-10x-x-109">p</span><sub><span 
+class="cmmi-8">i</span></sub> at several scales
+<span 
+class="cmmi-10x-x-109">r </span><span 
+class="cmsy-10x-x-109">&isin; </span><span 
+class="cmmi-10x-x-109">R </span>= <span 
+class="cmsy-10x-x-109">{</span>1<span 
+class="cmmi-10x-x-109">,</span>0<span 
+class="cmmi-10x-x-109">.</span>8<span 
+class="cmmi-10x-x-109">,</span>0<span 
+class="cmmi-10x-x-109">.</span>5<span 
+class="cmmi-10x-x-109">,</span>0<span 
+class="cmmi-10x-x-109">.</span>25<span 
+class="cmsy-10x-x-109">}</span>, and take the result <span class="bar-css"><span 
+class="cmmi-10x-x-109">S</span></span><sub><span 
+class="cmmi-8">i</span></sub> to be the average of all scales for
+<span 
+class="cmmi-10x-x-109">K </span>neighbors, with a scaling factor:
+<table 
+class="align">
+                  <tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">S</span><sub><span 
+class="cmmi-8">i</span></sub><sup><span 
+class="cmmi-8">r</span></sup></td>                  <td 
+class="align-even"> = 1 <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">exp</span><img 
+src="saliency1x.png" alt="{        K         }
+     -1 &sum;     r  r
+  1&minus; K     d(pi,pk)
+        k=1"  class="left" align="middle"></td>                                    <td 
+class="align-label"><a 
+ id="x1-4002r2"></a>(2)
+                  </td></tr><tr><td 
+class="align-odd"><span class="bar-css"><span 
+class="cmmi-10x-x-109">S</span></span><sub><span 
+class="cmmi-8">i</span></sub></td>                   <td 
+class="align-even"> = <img 
+src="saliency2x.png" alt="-1-
+|R|"  class="frac" align="middle"><span 
+class="cmex-10x-x-109">&sum;</span>
+     <sub><span 
+class="cmmi-8">r</span><span 
+class="cmsy-8">&isin;</span><span 
+class="cmmi-8">R</span></sub><sup><span 
+class="cmmi-8">R</span></sup><span 
+class="cmmi-10x-x-109">S</span><sub>
+<span 
+class="cmmi-8">i</span></sub><sup><span 
+class="cmmi-8">r</span></sup></td>                                                 <td 
+class="align-label"><a 
+ id="x1-4003r3"></a>(3)                  </td></tr></table>
+<!--l. 41--><p class="indent" >   Usually by this point the map is noisy to various degrees (Figure <a 
+href="#x1-4013r2">3b<!--tex4ht:ref: sal:fish:sbar --></a>). To
+temper it, we apply an iterative thresholding function, and generate a normalized
+distance map <span 
+class="cmmi-10x-x-109">&#x015C;</span> for each zero pixel to all nonzero pixels within a radius <span 
+class="cmmi-10x-x-109">r </span>= 32. A
+single threshold does not work well for all images across a dataset, and
+neither do typical adaptive methoods. Not only is the saliency map for an
+image typically multimodal (Figure <a 
+href="#x1-4005r2">2b<!--tex4ht:ref: sal:kde-selected --></a>), in aggregate they tend towards
+                                                                     
+
+                                                                     
+uniformity (Figure <a 
+href="#x1-4004r1">2a<!--tex4ht:ref: sal:kde --></a>), making it difficult to use a fixed or adaptive
+threshold.
+<!--l. 43--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-40062"></a>
+                                                                     
+
+                                                                     
+<!--l. 44--><p class="noindent" ><!--l. 46--><p class="noindent" ><img 
+src="images/kde.png" alt="PIC"  
+width="256.95999pt" height="192.71999pt" > <a 
+ id="x1-4004r1"></a>
+<span 
+class="cmr-10">Smoothed</span>
+<span 
+class="cmr-10">saliency  histograms  for</span>
+<span 
+class="cmr-10">all  of  Dataset  1,  which</span>
+<span 
+class="cmr-10">tend towards uniformity.</span>
+
+<!--l. 52--><p class="noindent" ><img 
+src="images/kde-selected.png" alt="PIC"  
+width="256.95999pt" height="192.71999pt" > <a 
+ id="x1-4005r2"></a>
+<span 
+class="cmr-10">Smoothed         saliency</span>
+<span 
+class="cmr-10">histograms  for  the  first</span>
+<span 
+class="cmr-10">10 images of Dataset 1,</span>
+<span 
+class="cmr-10">which are multi-modal.</span>
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;2: </span><span  
+class="content">Histograms of saliency maps</span></div><!--tex4ht:label?: x1-40062 -->
+                                                                     
+
+                                                                     
+<!--l. 57--><p class="indent" >   </div><hr class="endfigure">
+<!--l. 59--><p class="indent" >   This tempering step is expensive &#8211; but without it, the result looks like Figure
+<a 
+href="#x1-4013r2">3b<!--tex4ht:ref: sal:fish:sbar --></a>, with an abundance of false positives. An alternative formulation is also
+considered, as shown in Figure <a 
+href="#x1-4016r5">3e<!--tex4ht:ref: sal:fish:notemp --></a>: the saliency map with a much faster,
+simplified tempering step. Simplified tempering takes the mean of 10
+thresholds of <span class="bar-css"><span 
+class="cmmi-10x-x-109">S</span></span> between 0 and 255. However, this is not of much help for
+reasons explained in Section <a 
+href="#x1-50001.4">1.4<!--tex4ht:ref: sal:propoverlaptempering --></a>. The full tempering map, <span 
+class="cmmi-10x-x-109">&#x015C;</span>, works as
+follows:
+<!--l. 61--><p class="indent" >
+<table 
+class="align">
+                 <tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">d</span><sub><span 
+class="cmmi-8">thresh</span></sub>(<span 
+class="cmmi-10x-x-109">p</span><sub><span 
+class="cmmi-8">i</span></sub><span 
+class="cmmi-10x-x-109">,t</span>)</td>                 <td 
+class="align-even"> = <span 
+class="cmex-10x-x-109">&sum;</span>
+   <sub><span 
+class="cmmi-8">p</span><sub><span 
+class="cmmi-6">j</span></sub><span 
+class="cmsy-8">&isin;</span><span class="bar-css"><span 
+class="cmmi-8">S</span></span><span 
+class="cmr-8">(</span><span 
+class="cmmi-8">p</span><span 
+class="cmr-8">)</span><span 
+class="cmmi-8">&#x003E;t</span></sub><span 
+class="cmmi-10x-x-109">d</span><sub><span 
+class="cmmi-8">position</span></sub>(<span 
+class="cmmi-10x-x-109">p</span><sub><span 
+class="cmmi-8">i</span></sub><span 
+class="cmmi-10x-x-109">,p</span><sub><span 
+class="cmmi-8">j</span></sub>)</td>                                  <td 
+class="align-label"><a 
+ id="x1-4007r4"></a>(4)
+                 </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">dist</span>(<span 
+class="cmmi-10x-x-109">p</span>)</td>                      <td 
+class="align-even"> = <img 
+src="saliency3x.png" alt="-1-
+|T|"  class="frac" align="middle"><span 
+class="cmex-10x-x-109">&sum;</span>
+     <sub><span 
+class="cmmi-8">t</span><span 
+class="cmsy-8">&isin;</span><span 
+class="cmmi-8">T</span> </sub><sup><span 
+class="cmmi-8">T</span> </sup><span 
+class="cmmi-10x-x-109">d</span><sub>
+<span 
+class="cmmi-8">thresh</span></sub>(<span 
+class="cmmi-10x-x-109">p,t</span>)</td>                                     <td 
+class="align-label"><a 
+ id="x1-4008r5"></a>(5)
+                 </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">count</span>(<span 
+class="cmmi-10x-x-109">p</span>)</td>                    <td 
+class="align-even"> = <span 
+class="cmex-10x-x-109">&sum;</span>
+  <sub><span 
+class="cmmi-8">t</span><span 
+class="cmsy-8">&isin;</span><span 
+class="cmmi-8">T</span> </sub><sup><span 
+class="cmmi-8">T</span> </sup><span 
+class="cmsy-10x-x-109">|</span><span class="bar-css"><span 
+class="cmmi-10x-x-109">S</span></span>(<span 
+class="cmmi-10x-x-109">p</span>) <span 
+class="cmmi-10x-x-109">&#x003E; t</span><span 
+class="cmsy-10x-x-109">|</span></td>                                          <td 
+class="align-label"><a 
+ id="x1-4009r6"></a>(6)
+                 </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">&#x015C;</span><sub><span 
+class="cmmi-8">i</span></sub></td>                          <td 
+class="align-even"> = <img 
+src="saliency4x.png" alt="dist(pi)&sdot;count(pi)
+     r2&radic; 2r2"  class="frac" align="middle"></td>                                         <td 
+class="align-label"><a 
+ id="x1-4010r7"></a>(7)
+                 </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">S</span></td>                          <td 
+class="align-even"> = <span class="bar-css"><span 
+class="cmmi-10x-x-109">S</span></span> <span 
+class="cmsy-10x-x-109">&sdot;</span><span 
+class="cmmi-10x-x-109">&#x015C;</span></td>                                                      <td 
+class="align-label"><a 
+ id="x1-4011r8"></a>(8)                 </td></tr></table>
+<!--l. 69--><p class="indent" >   where <span class="bar-css"><span 
+class="cmmi-10x-x-109">S</span></span>(<span 
+class="cmmi-10x-x-109">p</span>) returns the set of pixels surrounding <span 
+class="cmmi-10x-x-109">p</span>, in <span class="bar-css"><span 
+class="cmmi-10x-x-109">S</span></span>. To justify the
+formulation of <span 
+class="cmmi-10x-x-109">&#x015C;</span>: <span 
+class="cmmi-10x-x-109">dist</span><span 
+class="cmsy-10x-x-109">&sdot;</span><span 
+class="cmmi-10x-x-109">count </span>rewards a pixel if its patch contains multiple nearby
+nonzero pixels. This helps to reduce the weight of sparse patches, and fills in
+dense blobs. The product is normalized by <span 
+class="cmmi-10x-x-109">r</span><sup><span 
+class="cmr-8">2</span></sup> (maximum count) and <img 
+src="saliency5x.png" alt="&radic;--2
+ 2r"  class="sqrt" >
+(maximum <span 
+class="cmmi-10x-x-109">L</span><sub><span 
+class="cmr-8">2</span></sub> distance to a nonzero pixel). The resulting distance map <span 
+class="cmmi-10x-x-109">&#x015C;</span> is
+scaled to be between 0 and 1.
+<!--l. 71--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-40173"></a>
+                                                                     
+
+                                                                     
+<!--l. 73--><p class="noindent" ><!--l. 75--><p class="noindent" ><img 
+src="images/fish.png" alt="PIC"  
+width="136.51pt" height="200.75pt" > <a 
+ id="x1-4012r1"></a>
+<span 
+class="cmr-10">Original Image</span>
+
+<!--l. 81--><p class="noindent" ><img 
+src="images/sbar.png" alt="PIC"  
+width="136.51pt" height="200.75pt" > <a 
+ id="x1-4013r2"></a>
+<span class="bar-css"><span 
+class="cmmi-10">S</span></span>
+
+<!--l. 87--><p class="noindent" ><img 
+src="images/shat.png" alt="PIC"  
+width="136.51pt" height="200.75pt" > <a 
+ id="x1-4014r3"></a>
+<span 
+class="cmmi-10">&#x015C;</span>
+
+<!--l. 93--><p class="noindent" ><img 
+src="images/s.png" alt="PIC"  
+width="136.51pt" height="200.75pt" > <a 
+ id="x1-4015r4"></a>
+<span 
+class="cmr-10">Final Saliency Map (</span><span class="bar-css"><span 
+class="cmmi-10">S</span></span><span 
+class="cmsy-10">&sdot;</span><span 
+class="cmmi-10">&#x015C;</span><span 
+class="cmr-10">)</span>
+
+<!--l. 99--><p class="noindent" ><img 
+src="images/fish-notemp.png" alt="PIC"  
+width="136.51pt" height="200.75pt" > <a 
+ id="x1-4016r5"></a>
+<span 
+class="cmr-10">Saliency     Map     with</span>
+<span 
+class="cmr-10">Simplified Tempering</span>
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;3: </span><span  
+class="content">Sample image with various intermediate results. Final saliency
+map is at Figure <a 
+href="#x1-4015r4">3d<!--tex4ht:ref: sal:fish:final --></a>.</span></div><!--tex4ht:label?: x1-40173 -->
+                                                                     
+
+                                                                     
+<!--l. 104--><p class="indent" >   </div><hr class="endfigure">
+   <h4 class="subsectionHead"><span class="titlemark">1.4   </span> <a 
+ id="x1-50001.4"></a>Propagation and Overlap</h4>
+<!--l. 107--><p class="noindent" >Complete (100%) overlap is the full sliding-window WHT, and 0% overlap is
+equivalent to the non-overlapping, block-based WHT. (In practice, &#8221;100%&#8221;
+overlap is actually <span 
+class="cmmi-10x-x-109">n </span><span 
+class="cmsy-10x-x-109">&minus; </span>1 pixels, where <span 
+class="cmmi-10x-x-109">n </span>is the kernel size &#8211; here, <span 
+class="cmmi-10x-x-109">n </span>= 8.)
+Complete overlap leads to over-fitting from too many similar neighbors in a single
+leaf. Propagation helps mitigate this by increasing the search space, but from
+Figure <a 
+href="#x1-5001r1">4a<!--tex4ht:ref: sal:roc-overlap-prop --></a>, simply decreasing the amount of overlap helps more. 75% overlap is
+functionally indistinguishably from 0% overlap (Figure <a 
+href="#x1-5002r2">4b<!--tex4ht:ref: sal:roc-overlap --></a>), in fact the optimal
+overlap appears to be around 25%. Here, the contributions of propagtion are
+small, albeit measurable &#8211; yielding a 3-4% improvement at most (Figure
+<a 
+href="#x1-5001r1">4a<!--tex4ht:ref: sal:roc-overlap-prop --></a>).
+<!--l. 109--><p class="indent" >   Note that the while the tree is built with partially overlapping patches, each
+pixel maintains its own patch during the saliency-detection stage.
+<!--l. 111--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-50034"></a>
+                                                                     
+
+                                                                     
+<!--l. 112--><p class="noindent" ><!--l. 114--><p class="noindent" ><img 
+src="images/overlap-prop.png" alt="PIC"  
+width="513.92pt" height="385.43999pt" > <a 
+ id="x1-5001r1"></a>
+<span 
+class="cmr-10">Error curves for various</span>
+<span 
+class="cmr-10">parameters</span>
+
+<!--l. 120--><p class="noindent" ><img 
+src="images/overlap.png" alt="PIC"  
+width="513.92pt" height="385.43999pt" > <a 
+ id="x1-5002r2"></a>
+<span 
+class="cmr-10">Error curves for various</span>
+<span 
+class="cmr-10">overlaps               (with</span>
+<span 
+class="cmr-10">propagation).</span>
+<span 
+class="cmr-10">Zoomed-in section shows</span>
+<span 
+class="cmr-10">the   minimal   difference</span>
+<span 
+class="cmr-10">between the first 4 modes</span>
+<span 
+class="cmr-10">(note the scale).</span>
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;4: </span><span  
+class="content">Error Curves for Propagation and Overlap, Dataset 1</span></div><!--tex4ht:label?: x1-50034 -->
+                                                                     
+
+                                                                     
+<!--l. 125--><p class="indent" >   </div><hr class="endfigure">
+<!--l. 127--><p class="indent" >   Figure <a 
+href="#x1-50065">5<!--tex4ht:ref: sal:temperingmain --></a> is interesting: the simplified tempering generates nearly identical
+ROCs as without &#8211; which is somewhat to be expected; while the magnitude of
+the intensities may change, on balance the relative differences stay the same
+(Figure <a 
+href="#x1-5004r1">5a<!--tex4ht:ref: sal:tempering --></a>). Looking at the curves at each threshold (Figure <a 
+href="#x1-5005r2">5b<!--tex4ht:ref: sal:tprfpr --></a>) tells a different
+story: the true positive rate (TPR) for <span class="bar-css"><span 
+class="cmmi-10x-x-109">S</span></span> is extremely high &#8211; a symptom of
+over-fitting. Indeed, the false positive rate (FPR) for <span class="bar-css"><span 
+class="cmmi-10x-x-109">S</span></span> is also convex: pixels are
+being labelled as salient indiscriminately. For simple tempering, the TPR/FPR
+has a more agreeable shape (in spite of being somewhat stair-shaped),
+but incorporating <span 
+class="cmmi-10x-x-109">&#x015C;</span> into the final map <span 
+class="cmmi-10x-x-109">S </span>shows the best results, due
+to the fact it diffuses salient pixels from dense areas (increasing TPR)
+while simultaneously lowering the weight of sparse areas (decreasing
+FPR).
+<!--l. 129--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-50065"></a>
+                                                                     
+
+                                                                     
+<!--l. 130--><p class="noindent" ><!--l. 132--><p class="noindent" ><img 
+src="images/tempering.png" alt="PIC"  
+width="513.92pt" height="385.43999pt" > <a 
+ id="x1-5004r1"></a>
+<span 
+class="cmr-10">Error  curves,  with  25%</span>
+<span 
+class="cmr-10">overlap   for   each.   &#8221;S&#8221;</span>
+<span 
+class="cmr-10">is  the  primary  saliency</span>
+<span 
+class="cmr-10">map,  &#8221;Simple&#8221;  replaces</span>
+<span 
+class="cmmi-10">&#x015C;</span> <span 
+class="cmr-10">with the average of an</span>
+<span 
+class="cmr-10">iterated threshold, while</span>
+<span class="bar-css"><span 
+class="cmmi-10">S</span></span> <span 
+class="cmr-10">is equivalent to taking</span>
+<span 
+class="cmr-10">the       non-thresholded</span>
+<span 
+class="cmr-10">result, eg Figure </span><a 
+href="#x1-4013r2"><span 
+class="cmr-10">3b</span><!--tex4ht:ref: sal:fish:sbar --></a><span 
+class="cmr-10">.</span>
+
+<!--l. 138--><p class="noindent" ><img 
+src="images/tpr-fpr.png" alt="PIC"  
+width="513.92pt" height="385.43999pt" > <a 
+ id="x1-5005r2"></a>
+<span 
+class="cmr-10">True        Positive/False</span>
+<span 
+class="cmr-10">Positive  rates  at  each</span>
+<span 
+class="cmr-10">threshold value between</span>
+<span 
+class="cmr-10">0 and 255.</span>
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;5: </span><span  
+class="content">Two perspectives on error rates, Dataset 1</span></div><!--tex4ht:label?: x1-50065 -->
+                                                                     
+
+                                                                     
+<!--l. 144--><p class="indent" >   </div><hr class="endfigure">
+   <h4 class="subsectionHead"><span class="titlemark">1.5   </span> <a 
+ id="x1-60001.5"></a>Related Work and Comparison</h4>
+<!--l. 148--><p class="noindent" >We compare against Itti&#8217;s classical algorithm <span class="cite">[<a 
+href="#XIttiSaliency">5</a>]</span> which emulates low-level features of
+human vision, Hou&#8217;s Spectral Residual <span class="cite">[<a 
+href="#XHouSpectralResidual">4</a>]</span>, which suppresses redundant
+information by taking the difference of an image&#8217;s Fourier log-spectrum and the
+spectrum&#8217;s moving average, and Achanta&#8217;s Frequency-Tuned Saliency <span class="cite">[<a 
+href="#XAchantaFTSRD">1</a>]</span>
+where the entire image is treated as a surround (approximated by the
+average color across the entire image), with the pixel of interest at the
+center. <span class="cite">[<a 
+href="#XIttiSaliency">5</a>]</span> and <span class="cite">[<a 
+href="#XHouSpectralResidual">4</a>]</span> operate on reduced-resolution versions of the image, so
+we scale the ground-truth down to accommodate when needed. Scaling
+also has the effect of making these algorithms much faster to run &#8211; we
+operate at full-resolution, with an extremely slow tempering step. <span class="cite">[<a 
+href="#XAchantaFTSRD">1</a>]</span>
+also operates at full resolution, which is naturally fast due to its simple
+construction.
+<!--l. 150--><p class="indent" >   ROC statistics are calculated following the method in <span class="cite">[<a 
+href="#XAchantaFTSRD">1</a>]</span>: The saliency map is
+thresholded from 0 to 255, and positive/negative statistics are gathered against
+the ground-truth mask. The values at each threshold are averaged across all
+images in the dataset. Algorithm <a 
+href="#x1-6005r1">1<!--tex4ht:ref: sal:stats --></a> sketches this thresholding step, and each
+saliency algorithm tested is run against this for comparision. We also do not
+binarize the generated saliency maps (for any algorithm), since it is not needed
+for our purposes.
+<!--l. 152--><p class="indent" >   Dataset 1 is composed of 1000 masks selected by <span class="cite">[<a 
+href="#XAchantaFTSRD">1</a>]</span>, with the original
+images from the MRSA 5000-image salient object dataset <span class="cite">[<a 
+href="#XLiuLearningSaliency">6</a>]</span>. Dataset 2 is
+composed of 62 images from <span class="cite">[<a 
+href="#XHouSpectralResidual">4</a>]</span> with well-outlined masks. In Dataset 1, the
+objects of interest are typically front-and-center while in Dataset 2, more
+background context is included, so salient features are less dominant. In
+Dataset 1 (Figure <a 
+href="#x1-60016">6<!--tex4ht:ref: sal:dscomp --></a>) the salient village is inconspicuous, while the lions
+blend into the background. On the other hand, Dataset 1&#8217;s skateboarder
+and airplane are trivially distinguishable (to the human eye, at least).
+Our algorithm is run with up to 40 neighbors and 50% overlap between
+patches.
+<!--l. 154--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-60016"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 155--><p class="noindent" ><img 
+src="images/dscomp.png" alt="PIC"  
+width="652.4375pt" height="401.5pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;6: </span><span  
+class="content">Dataset comparison. Top Half: Dataset 1, Bottom Half: Dataset
+2. Left to Right: Original, Ours, Itti, et al <span class="cite">[<a 
+href="#XIttiSaliency">5</a>]</span>, Hou et al <span class="cite">[<a 
+href="#XHouSpectralResidual">4</a>]</span>, Achanta et al
+<span class="cite">[<a 
+href="#XAchantaFTSRD">1</a>]</span></span></div><!--tex4ht:label?: x1-60016 -->
+                                                                     
+
+                                                                     
+<!--l. 159--><p class="indent" >   </div><hr class="endfigure">
+<!--l. 161--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-60027"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 162--><p class="noindent" ><img 
+src="images/roc-dataset2.png" alt="PIC"  
+width="513.92pt" height="385.43999pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;7: </span><span  
+class="content">Error curves for Dataset 1</span></div><!--tex4ht:label?: x1-60027 -->
+                                                                     
+
+                                                                     
+<!--l. 165--><p class="indent" >   </div><hr class="endfigure">
+<!--l. 167--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-60038"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 168--><p class="noindent" ><img 
+src="images/roc-dataset1.png" alt="PIC"  
+width="513.92pt" height="385.43999pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;8: </span><span  
+class="content">Error curves for Dataset 2</span></div><!--tex4ht:label?: x1-60038 -->
+                                                                     
+
+                                                                     
+<!--l. 171--><p class="indent" >   </div><hr class="endfigure">
+<!--l. 173--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-60049"></a><a 
+ id="x1-600022"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 174--><p class="noindent" ><img 
+src="images/strong.png" alt="PIC"  
+width="652.4375pt" height="401.5pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;9: </span><span  
+class="content">Strong results compared to other algorithms</span></div><!--tex4ht:label?: x1-60049 -->
+                                                                     
+
+                                                                     
+<!--l. 177--><p class="indent" >   </div><hr class="endfigure">
+<!--l. 179--><p class="indent" >   Results are competitive on Dataset 1. The poor performance on Dataset 2 is
+likely due to its use of difficult natural images. One interesting observation is that
+the paper which proposed the dataset tends to do well &#8211; <span class="cite">[<a 
+href="#XAchantaFTSRD">1</a>]</span> designated the masks
+for Dataset 1, while <span class="cite">[<a 
+href="#XHouSpectralResidual">4</a>]</span> dominates its own images in Dataset 2. Hence it is
+beneficial to compare results across a variety of datasets, both to prevent
+over-fitting to a particular image type, and to properly gauge efficacy
+claims.
+   <!--l. 181-->
+<a 
+ id="x1-6005r1"></a>
+<a 
+ id="x1-6006"></a>
+   <div class="lstlisting" id="listing-1"><span class="label"><a 
+ id="x1-6007r1"></a></span><span 
+class="cmtt-10x-x-109">static</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">void</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">calc_roc</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">Image</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">img</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">Image</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">mask</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6008r2"></a></span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6009r3"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">int</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tp</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">fp</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">fn</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tn</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6010r4"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">for</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">1;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">255;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">++)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6011r5"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tp</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">fp</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">fn</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tn</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6012r6"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">Image</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">*</span><span 
+class="cmtt-10x-x-109">thresh</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">threshold</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">img</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">i</span><span 
+class="cmtt-10x-x-109">);</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6013r7"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">for</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">y</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">y</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">img</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">height</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">y</span><span 
+class="cmtt-10x-x-109">++)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6014r8"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">for</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">x</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">=</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">x</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003C;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">img</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">width</span><span 
+class="cmtt-10x-x-109">;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">x</span><span 
+class="cmtt-10x-x-109">++)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">{</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6015r9"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">if</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">thresh</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">pixelAt</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">x</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">y</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003E;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&amp;&amp;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6016r10"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">mask</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">pixelAt</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">x</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">y</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003E;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6017r11"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tp</span><span 
+class="cmtt-10x-x-109">++;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">//</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">true</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">positive</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6018r12"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">else</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">if</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">thresh</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">pixelAt</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">x</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">y</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003E;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6019r13"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">fp</span><span 
+class="cmtt-10x-x-109">++;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">//</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">false</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">positive</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6020r14"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">else</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">if</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">mask</span><span 
+class="cmtt-10x-x-109">-&#x003E;</span><span 
+class="cmtt-10x-x-109">pixelAt</span><span 
+class="cmtt-10x-x-109">(</span><span 
+class="cmtt-10x-x-109">x</span><span 
+class="cmtt-10x-x-109">,</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">y</span><span 
+class="cmtt-10x-x-109">)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x003E;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">0)</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6021r15"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">fn</span><span 
+class="cmtt-10x-x-109">++;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">//</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">false</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">negative</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6022r16"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">else</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6023r17"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">tn</span><span 
+class="cmtt-10x-x-109">++;;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">//</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">true</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">negative</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6024r18"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">}</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6025r19"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">}</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6026r20"></a></span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><span 
+class="cmtt-10x-x-109">}</span><span 
+class="cmtt-10x-x-109">&#x00A0;</span><br /><span class="label"><a 
+ id="x1-6027r21"></a></span><span 
+class="cmtt-10x-x-109">}</span>
+   
+<br /> <div class="caption" 
+><span class="id">Algorithm&#x00A0;1: </span><span  
+class="content">Saliency Statistics</span></div><!--tex4ht:label?: x1-60001 -->
+   </div>
+   <h4 class="subsectionHead"><span class="titlemark">1.6   </span> <a 
+ id="x1-70001.6"></a>Weakness</h4>
+<!--l. 206--><p class="noindent" >Images where the objects of interest blend into the background, or background
+objects have otherwise distracting colors and features. In short, we fare poorly on
+Dataset 2. For the top half of of Figure <a 
+href="#x1-700110">10<!--tex4ht:ref: sal:weak --></a>, the sky and landscaping are
+mistakenly detected, while in the bottom half, sun glare overwhelms salient
+objects. Moreover, the eagle is only outlined. Spectral Residual performs very
+well, and FTSRD suppresses background well, although it is still susceptible to
+glare.
+<!--l. 208--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-700110"></a>
+                                                                     
+
+                                                                     
+
+<!--l. 209--><p class="noindent" ><img 
+src="images/weak.png" alt="PIC"  
+width="652.4375pt" height="401.5pt" >
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;10: </span><span  
+class="content">Poor Results compared to other algorithms</span></div><!--tex4ht:label?: x1-700110 -->
+                                                                     
+
+                                                                     
+<!--l. 212--><p class="indent" >   </div><hr class="endfigure">
+   <h3 class="likesectionHead"><a 
+ id="x1-80001.6"></a>References</h3>
+<!--l. 1--><p class="noindent" >
+   <div class="thebibliography">
+   <p class="bibitem" ><span class="biblabel">
+ [1]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XAchantaFTSRD"></a>Radhakrishna  Achanta,  Sheila  Hemami,  Francisco  Estrada,  and
+   Sabine Süsstrunk. Frequency-tuned Salient Region Detection. In <span 
+class="cmti-10x-x-109">IEEE</span>
+   <span 
+class="cmti-10x-x-109">International Conference on Computer Vision and Pattern Recognition</span>
+   <span 
+class="cmti-10x-x-109">(CVPR 2009)</span>, pages 1597 &#8211; 1604, 2009.  For code and supplementary
+   material, click on the url below.
+   </p>
+   <p class="bibitem" ><span class="biblabel">
+ [2]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XGofermanSaliency"></a>Stas Goferman, Lihi Zelnik-Manor, and Ayellet Tal.  Context-aware
+   saliency  detection.     In  <span 
+class="cmti-10x-x-109">Computer  Vision  and  Pattern  Recognition</span>
+   <span 
+class="cmti-10x-x-109">(CVPR), 2010 IEEE Conference on</span>, pages 2376&#8211;2383, June.
+   </p>
+   <p class="bibitem" ><span class="biblabel">
+ [3]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XHeKdTree"></a>Kaiming He and Jian Sun.  Computing nearest-neighbor fields via
+   propagation-assisted kd-trees. In <span 
+class="cmti-10x-x-109">CVPR</span>, pages 111&#8211;118. IEEE, 2012.
+   </p>
+   <p class="bibitem" ><span class="biblabel">
+ [4]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XHouSpectralResidual"></a>Xiaodi Hou and Liqing Zhang. Saliency detection: A spectral residual
+   approach.  In <span 
+class="cmti-10x-x-109">Computer Vision and Pattern Recognition, 2007. CVPR</span>
+   <span 
+class="cmti-10x-x-109">&#8217;07. IEEE Conference on</span>, pages 1&#8211;8, 2007.
+   </p>
+   <p class="bibitem" ><span class="biblabel">
+ [5]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XIttiSaliency"></a>L.&#x00A0;Itti, C.&#x00A0;Koch, and E.&#x00A0;Niebur.  A model of saliency-based visual
+   attention  for  rapid  scene  analysis.    <span 
+class="cmti-10x-x-109">IEEE  Transactions  on  Pattern</span>
+   <span 
+class="cmti-10x-x-109">Analysis and Machine Intelligence</span>, 20(11):1254&#8211;1259, Nov 1998.
+   </p>
+   <p class="bibitem" ><span class="biblabel">
+ [6]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XLiuLearningSaliency"></a>Tie Liu, Jian Sun, Nan ning Zheng, Xiaoou Tang, and Heung yeung
+   Shum.    Learning  to  detect  a  salient  object.    In  <span 
+class="cmti-10x-x-109">in:  Proceedings  of</span>
+   <span 
+class="cmti-10x-x-109">IEEE Computer Society Conference on Computer and Vision Pattern</span>
+   <span 
+class="cmti-10x-x-109">Recognition (CVPR</span>, pages 1&#8211;8. CVPR, 2007.
+                                                                     
+
+                                                                     
+</p>
+   </div>
+    
+</body></html> 
+
+                                                                     
+
+
