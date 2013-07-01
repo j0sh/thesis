@@ -8,10 +8,21 @@
 #include "kdtree.h"
 #include "prop.h"
 #include "wht.h"
+#include "sal.h"
 
 #define XY_TO_INT(x, y) (((y) << 16) | (x))
 #define XY_TO_X(x) ((x)&((1<<16)-1))
 #define XY_TO_Y(y) ((y)>>16)
+
+#define KERNS 8
+
+#include <sys/time.h>
+static inline double get_time()
+{
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    return t.tv_sec + t.tv_usec * 1e-6;
+}
 
 static void print_usage(char **argv)
 {
@@ -139,21 +150,21 @@ static int* block_coeffs(IplImage *img, int* plane_coeffs) {
     int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     int sz = size.width*size.height/64*dim;
     int *buf = malloc(sizeof(int)*sz);
-    unsigned *order_p0 = build_path(plane_coeffs[0], 8);
-    unsigned *order_p1 = build_path(plane_coeffs[1], 8);
-    unsigned *order_p2 = build_path(plane_coeffs[2], 8);
+    unsigned *order_p0 = build_path(plane_coeffs[0], KERNS);
+    unsigned *order_p1 = build_path(plane_coeffs[1], KERNS);
+    unsigned *order_p2 = build_path(plane_coeffs[2], KERNS);
 
     cvSplit(img, b, g, r, NULL);
 
     wht2d(b, trans);
-    quantize(trans, plane_coeffs[0], 8, order_p0, buf, dim);
+    quantize(trans, plane_coeffs[0], KERNS, order_p0, buf, dim);
 
     wht2d(g, trans);
-    quantize(trans, plane_coeffs[1], 8, order_p1,
+    quantize(trans, plane_coeffs[1], KERNS, order_p1,
         buf+plane_coeffs[0], dim);
 
     wht2d(r, trans);
-    quantize(trans, plane_coeffs[2], 8, order_p2,
+    quantize(trans, plane_coeffs[2], KERNS, order_p2,
         buf+plane_coeffs[0]+plane_coeffs[1], dim);
 
     cvReleaseImage(&trans);
@@ -176,19 +187,19 @@ static IplImage* splat(int *coeffs, CvSize size, int *plane_coeffs)
     IplImage *img = cvCreateImage(size, IPL_DEPTH_8U, 3);
     IplImage *trans = cvCreateImage(size, IPL_DEPTH_16S, 1);
     int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
-    unsigned *order_p0 = build_path(plane_coeffs[0], 8);
-    unsigned *order_p1 = build_path(plane_coeffs[1], 8);
-    unsigned *order_p2 = build_path(plane_coeffs[2], 8);
+    unsigned *order_p0 = build_path(plane_coeffs[0], KERNS);
+    unsigned *order_p1 = build_path(plane_coeffs[1], KERNS);
+    unsigned *order_p2 = build_path(plane_coeffs[2], KERNS);
 
     memset(trans->imageData, 0, trans->imageSize);
-    dequantize(trans, plane_coeffs[0], order_p0, 8, coeffs, dim);
+    dequantize(trans, plane_coeffs[0], order_p0, KERNS, coeffs, dim);
     iwht2d(trans, g);
     memset(trans->imageData, 0, trans->imageSize);
-    dequantize(trans, plane_coeffs[1], order_p1, 8,
+    dequantize(trans, plane_coeffs[1], order_p1, KERNS,
         coeffs+plane_coeffs[0], dim);
     iwht2d(trans, b);
     memset(trans->imageData, 0, trans->imageSize);
-    dequantize(trans, plane_coeffs[2], order_p2, 8,
+    dequantize(trans, plane_coeffs[2], order_p2, KERNS,
         coeffs+plane_coeffs[0]+plane_coeffs[1], dim);
     iwht2d(trans, r);
 
@@ -279,23 +290,183 @@ static IplImage *alignedImageFrom(char *file, int align)
     return img;
 }
 
+static void calc_mbdiffs(IplImage *img)
+{
+    int w = img->width, h = img->height;
+    int mx = w/16 + (0 != w % 16), my = h/16 + (0 != h % 16);
+    int x, y, j;
+    char *data = img->imageData;
+    int stride = img->widthStep;
+    int size = mx*my*sizeof(uint8_t);
+    uint8_t *mbdiffs = malloc(size);
+    memset(mbdiffs, 0, size);
+    double start = get_time();
+    for (y = 0; y < h; y++) {
+        int mby = y/16, mbx = 0;
+        uint8_t*line = (uint8_t*)data;
+        for (x = 0; x < w; x+= 16) {
+            int mbxy = mby*mx + mbx;
+            int diffs = 0;
+            for (j = 0; j < 16; j++) { diffs += *line > 64; line++; }
+            mbdiffs[mbxy] += diffs;
+            mbx += 1;
+        }
+        data += stride;
+    }
+    data = img->imageData;
+    for (y = 0; y < h; y++) {
+        int mby = y/16, mbx = 0;
+        uint8_t *line = (uint8_t*)data;
+        for (x = 0; x < w; x += 16) {
+            int mbxy = mby*mx + mbx;
+            int val = (mbdiffs[mbxy] > 10) * 255;
+            for (j = 0; j < 16; j++) *line++ = val;
+            mbx += 1;
+        }
+        data += stride;
+    }
+    //printf("mbdiffs elapsed %f ms\n", (get_time() - start)*1000);
+    free(mbdiffs);
+}
+
+static IplImage* make_dc(IplImage *img)
+{
+    CvSize igsz = {img->width+1, img->height+1};
+    IplImage *ig = cvCreateImage(igsz, IPL_DEPTH_32S, img->nChannels);
+    IplImage *dc = cvCreateImage(cvGetSize(img), IPL_DEPTH_32S, img->nChannels);
+    int i, j;
+
+    double start = get_time(), end;
+    cvIntegral(img, ig, NULL, NULL);
+
+    uint8_t *d = (uint8_t*)ig->imageData;
+    int stride = ig->widthStep/sizeof(int);
+    int istride = dc->widthStep/sizeof(int);
+    int *data = (int*)d, *line;
+    int *data_k = data + KERNS, *line_k;
+    int *data_b = data + stride*KERNS, *line_b;
+    int *data_bk = data_k + stride*KERNS, *line_bk;
+    int *idata = (int*)dc->imageData, *iline;
+
+    for (i = 0; i < img->height - KERNS; i++) {
+        line = data;
+        line_k = data_k;
+        line_b = data_b;
+        line_bk = data_bk;
+        iline = idata;
+        for (j = 0; j < img->width - KERNS; j++) {
+#define LINE *iline++ = *line_bk++ + *line++ - *line_k++ - *line_b++
+            switch(img->nChannels) {
+            case 3: LINE;
+            case 2: LINE;
+            case 1: LINE;
+            }
+#undef LINE
+        }
+        data += stride;
+        data_k += stride;
+        data_b += stride;
+        data_bk += stride;
+        idata += istride;
+    }
+
+    end = get_time() - start;
+    //printf("dc elapsed %f ms\n", end*1000);
+    cvReleaseImage(&ig);
+    return dc;
+}
+
 static int plane_coeffs[] = {2, 9, 5};
-IplImage *recon_g, *diff_g;
+IplImage *recon_g, *diff_g, *lap_g, *gray_g, *mask_g, *bkg_g;
+static void init_g(IplImage *bkg)
+{
+    CvSize bsz = cvGetSize(bkg);
+    recon_g = cvCreateImage(bsz, bkg->depth, bkg->nChannels);
+    diff_g  = cvCreateImage(bsz, bkg->depth, bkg->nChannels);
+    bkg_g   = cvCreateImage(bsz, bkg->depth, bkg->nChannels);
+    gray_g  = cvCreateImage(bsz, bkg->depth, 1);
+    mask_g  = cvCreateImage(bsz, bkg->depth, 1);
+    lap_g   = cvCreateImage(bsz, IPL_DEPTH_32F, bkg->nChannels);
+}
+
+static void free_g()
+{
+    cvReleaseImage(&recon_g);
+    cvReleaseImage(&diff_g);
+    cvReleaseImage(&gray_g);
+    cvReleaseImage(&mask_g);
+    cvReleaseImage(&lap_g);
+    cvReleaseImage(&bkg_g);
+}
+
 static void process(kd_tree *kdt, IplImage *bkg, IplImage *img)
 {
-    int *imgc = block_coeffs(img, plane_coeffs);
+    //int *imgc = block_coeffs(img, plane_coeffs);
+    cvAbsDiff(img, bkg, diff_g);
+    int *imgc = block_coeffs(diff_g, plane_coeffs);
     CvSize img_blks = {(img->width/8)+7, (img->height/8)+7};
     IplImage *xy = prop_match_complete(kdt, imgc, bkg, img_blks);
     IplImage *rev = splat(imgc, cvGetSize(img), plane_coeffs);
-    xy2blks_special(xy, bkg, recon_g, 8);
-    cvAbsDiff(recon_g, rev, diff_g);
+    xy2blks_special(xy, bkg_g, recon_g, 8);
+    cvAbsDiff(rev, recon_g, diff_g);
+    cvCvtColor(diff_g, gray_g, CV_BGR2GRAY);
+
+    // full pixel dc
+    IplImage *dc = make_dc(gray_g);
+    //IplImage *mask = cvCreateImage(cvGetSize(dc), dc->depth, 1);
+    //cvAdaptiveThreshold(dc, mask, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, CV_THRESH_BINARY, 3, 0);
+
+    // macroblock based counts
+    calc_mbdiffs(gray_g);
+    //cvAdaptiveThreshold(gray_g, mask_g, 255, CV_ADAPTIVE_THRESH_GAUSSIAN_C, CV_THRESH_BINARY, 3, 0);
+
+    //cvSmooth(mask_g, mask_g, CV_GAUSSIAN, 9, 9, 0, 0);
+    //cvSmooth(diff_g, diff_g, CV_GAUSSIAN, 5, 5, 0, 0);
+    //cvLaplace(diff_g, lap_g, 3);
     //IplImage *xy = prop_match(bkg, img);
     //xy2img(xy, bkg, recon_g);
     //cvAbsDiff(recon_g, img, diff_g);
-    cvShowImage("img", recon_g);
-    cvShowImage("diff", diff_g);
+    //cvShowImage("img", recon_g);
+    //cvShowImage("diff", diff_g);
+    cvShowImage("gray", gray_g);
+    //cvShowImage("dc mask", mask);
+    //cvShowImage("block mask", mask_g);
+    cvShowImage("dc", dc);
     free(imgc);
     cvReleaseImage(&xy);
+    cvReleaseImage(&rev);
+    cvReleaseImage(&dc);
+    //cvReleaseImage(&mask);
+}
+
+static void test(IplImage *a, IplImage *b)
+{
+    CvSize s = cvGetSize(b);
+    //s.width /= 2;
+    //s.height /= 2;
+    IplImage *rsz = alignedImage(s, b->depth, b->nChannels, 8);
+    cvResize(b, rsz, CV_INTER_CUBIC);
+    IplImage *sal = saliency(rsz);
+    cvShowImage("saliency", sal);
+    cvReleaseImage(&rsz);
+    cvReleaseImage(&sal);
+    return;
+
+    int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
+    int i, sz = a->width*a->height/64*dim;
+    int *imga = block_coeffs(a, plane_coeffs);
+    int *imgb = block_coeffs(b, plane_coeffs);
+    int *imgc = malloc(sz*sizeof(int));
+
+
+    //for (i = 0; i < sz; i++) imgc[i] = imga[i] - imgb[i];
+
+    //cvAbsDiff(a, b, diff_g);
+    //IplImage *rev = splat(imgc, cvGetSize(a), plane_coeffs);
+    //cvShowImage("transformed diff", rev);
+    //cvShowImage("diff", diff_g);
+    //cvReleaseImage(&rev);
+    free(imgc);
 }
 
 int main(int argc, char **argv)
@@ -304,23 +475,33 @@ int main(int argc, char **argv)
     char *path = argv[1];
     int start = atoi(argv[2]), end = atoi(argv[3]), i, *bkgc;
     IplImage *bkg = alignedImageFrom(mkname(path, start-1), 8);
+    IplImage *b2 = alignedImageFrom(mkname(path, 1), 8);
     int dim = plane_coeffs[0] + plane_coeffs[1] + plane_coeffs[2];
     CvSize bsz = cvGetSize(bkg);
     int w = bsz.width - 8 + 1, h = bsz.height - 8 + 1, sz = w*h;
     kd_tree kdt;
+    double t = 0;
 
     printf("cd: %s %d %d\n", path, start, end);
+    init_g(bkg);
     memset(&kdt, 0, sizeof(kd_tree));
-    prop_coeffs(bkg, plane_coeffs, &bkgc);
+    cvAbsDiff(bkg, b2, bkg_g);
+    prop_coeffs(bkg_g, plane_coeffs, &bkgc);
     kdt_new(&kdt, bkgc, sz, dim);
-    recon_g = cvCreateImage(bsz, bkg->depth, bkg->nChannels);
-    diff_g  = cvCreateImage(bsz, bkg->depth, bkg->nChannels);
 
     for (i = start; i < end; i++) {
+    //for (i = 1; i < end; i++) {
         IplImage *img = alignedImageFrom(mkname(path, i), 8);
-        process(&kdt, bkg, img);
+        double start = get_time();
+        //process(&kdt, bkg, img);
+        test(bkg, img);
+        t += (get_time() - start);
         if ((cvWaitKey(1)&255)==27)break; // esc
         cvReleaseImage(&img);
     }
+    printf("avg: %fms\n", t/(i-start)*1000);
+    //free_g();
+    kdt_free(&kdt);
+    free(bkgc);
     return 0;
 }
