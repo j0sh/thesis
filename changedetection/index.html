@@ -1,0 +1,951 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"  
+  "http://www.w3.org/TR/html4/loose.dtd">  
+<html > 
+<head><title></title> 
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1"> 
+<meta name="generator" content="TeX4ht (http://www.cse.ohio-state.edu/~gurari/TeX4ht/)"> 
+<meta name="originator" content="TeX4ht (http://www.cse.ohio-state.edu/~gurari/TeX4ht/)"> 
+<!-- html --> 
+<meta name="src" content="cd.tex"> 
+<meta name="date" content="2013-07-10 15:07:00"> 
+<link rel="stylesheet" type="text/css" href="cd.css"> 
+</head><body 
+>
+   <h3 class="sectionHead"><span class="titlemark">1   </span> <a 
+ id="x1-10001"></a>Background Detection using Nearest-Neighbors</h3>
+<!--l. 16--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.1   </span> <a 
+ id="x1-20001.1"></a>Preamble</h4>
+<!--l. 16--><p class="noindent" >An algorithm for background detection in video using nearest-neighbors is
+described. Code for this implementation can be found <a 
+href="https://github.com/j0sh/thesis/blob/master/cd.c" >here</a>.
+<!--l. 18--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.2   </span> <a 
+ id="x1-30001.2"></a>Introduction</h4>
+<!--l. 19--><p class="noindent" >Nearest-neighbor (NN) concepts can be used as a primitive operation for
+background detection in video. Here an algorithm is proposed which does a
+global NN search for a query image against a background model. The error in
+reconstructing the query image from the background (in other words, the
+&#8221;closeness&#8221; of the NN match) indicates the likelihood a pixel is foreground or
+background. The motivation for this global NN search is to make the algorithm
+resilient to camera jitter and simple object motion without bounding the search
+radius.
+<!--l. 21--><p class="indent" >   Section <a 
+href="#x1-40001.3">1.3<!--tex4ht:ref: cd:related --></a> describes related work, Section <a 
+href="#x1-50001.4">1.4<!--tex4ht:ref: cd:algo --></a> describes background-detection
+algorithm, Section <a 
+href="#x1-60001.5">1.5<!--tex4ht:ref: cd:comp --></a> compares the results. Section <a 
+href="#x1-70001.6">1.6<!--tex4ht:ref: cd:future --></a> discusses potential for
+future work.
+<!--l. 23--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.3   </span> <a 
+ id="x1-40001.3"></a>Related Work</h4>
+<!--l. 25--><p class="noindent" >Neighborhood-based methods for background detection are not new; <span class="cite">[<a 
+href="#XSchickSuperpixels">13</a>]</span> utilizes
+super-pixels (rather than blocks), which align better to object and neighborhood
+boundaries. <span class="cite">[<a 
+href="#XLuRandomPatches">8</a>]</span> is a randomized algorithm which partitions patches into
+foreground/background &#8221;bags,&#8221; approximating a super-pixel construction. In
+Rectgauss-TEX <span class="cite">[<a 
+href="#XRectgaussTex">12</a>]</span>, coarse foreground segmentation is first done using a model
+composed of block-based color histograms, then the segmentation is further
+refined at the pixel level using Gaussian mixture models. In <span class="cite">[<a 
+href="#XHeikkilaBackgroundModelling">6</a>]</span>, the Local Binary
+Pattern statistic is used with a radial neighborhood-based histogram. <span class="cite">[<a 
+href="#XMosheSpatiotemporalGCK">10</a>]</span>
+extends the ideas of <span class="cite">[<a 
+href="#XGCK">2</a>]</span> for efficient Walsh-Hadamard filtering, incorporating the
+temporal domain.
+<!--l. 27--><p class="indent" >   State-of-the-art methods for background detection, however, are mostly be
+pixel-based while incorporating a diffusion step to propagate classificiation
+information to nearby pixels. PBAS <span class="cite">[<a 
+href="#XHoffmannPBAS">7</a>]</span> uses a feedback-based control scheme to
+continually adjust a background model and its segmentation thresholds. ViBE <span class="cite">[<a 
+href="#XBarnichVibe">1</a>]</span>
+                                                                     
+
+                                                                     
+holds a history for each pixel, expiring entries in the history at random. An
+update to ViBE <span class="cite">[<a 
+href="#XVDVibe">15</a>]</span> also runs morphological open/close operations as part of the
+thresholding step. As noted by <span class="cite">[<a 
+href="#XSchickSuperpixels">13</a>]</span>, morphological operations may affect
+statistics, improving precision but hurting recall, because they tend to change
+object contours.
+<!--l. 29--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.4   </span> <a 
+ id="x1-50001.4"></a>Algortithm</h4>
+<!--l. 31--><p class="noindent" >Firstly, the background model needs to be built. Here, the moving average of the
+first <span 
+class="cmmi-10x-x-109">n </span>frames of the image sequence is taken. <span 
+class="cmmi-10x-x-109">n </span>can be any number, but the
+dataset being used (<a 
+href="http://changedetection.net" class="url" ><span 
+class="cmtt-10x-x-109">http://changedetection.net</span></a>ChangeDetection.net
+<span class="cite">[<a 
+href="#XChangeDetectionDotNet">4</a>]</span>) provides a training period for each of its image sequences, typically
+100 <span 
+class="cmmi-10x-x-109">&#x003C; n &#x003C; </span>1000. Algorithms are not required to use all <span 
+class="cmmi-10x-x-109">n </span>frames for training,
+although results will not start tabulating until frame <span 
+class="cmmi-10x-x-109">n </span>+ 1; see Section
+<a 
+href="#x1-60001.5">1.5<!--tex4ht:ref: cd:comp --></a>.
+<!--l. 33--><p class="indent" >   During the training step, first take the average of the first <span 
+class="cmmi-10x-x-109">n </span>images as the
+background image <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">b</span></sub>, and the average difference <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">d</span></sub>:
+<table 
+class="align">
+                         <tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">b</span></sub></td>                         <td 
+class="align-even"> = 1<span 
+class="cmmi-10x-x-109">&#x2215;n</span><span 
+class="cmex-10x-x-109">&sum;</span>
+  <sub><span 
+class="cmmi-8">i</span><span 
+class="cmr-8">=1</span></sub><sup><span 
+class="cmmi-8">n</span></sup><span 
+class="cmmi-10x-x-109">I</span><sub>
+<span 
+class="cmmi-8">i</span></sub></td>                                                        <td 
+class="align-label"><a 
+ id="x1-5001r1"></a>(1)
+                         </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">d</span></sub></td>                         <td 
+class="align-even"> = 1<span 
+class="cmmi-10x-x-109">&#x2215;n</span><span 
+class="cmex-10x-x-109">&sum;</span>
+  <sub><span 
+class="cmmi-8">i</span><span 
+class="cmr-8">=1</span></sub><sup><span 
+class="cmmi-8">n</span></sup><span 
+class="cmsy-10x-x-109">|</span><span 
+class="cmmi-10x-x-109">I</span><sub>
+<span 
+class="cmmi-8">i</span></sub> <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">b</span></sub><span 
+class="cmsy-10x-x-109">|</span></td>                                                  <td 
+class="align-label"><a 
+ id="x1-5002r2"></a>(2)
+                         </td></tr><tr><td 
+class="align-odd"></td>                           <td 
+class="align-even"></td>                                              <td 
+class="align-label"><a 
+ id="x1-5003r3"></a>(3)                                                  </td></tr></table>
+<!--l. 39--><p class="indent" >   For the testing step, perform the following procedure for each input image
+<span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">i</span></sub>:
+<!--l. 41--><p class="indent" >
+                                                                     
+
+                                                                     
+<table 
+class="align">
+                        <tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">q</span></sub></td>                        <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">WHT</span><sub><span 
+class="cmr-8">16</span></sub>(<span 
+class="cmsy-10x-x-109">|</span><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">i</span></sub> <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">d</span></sub><span 
+class="cmsy-10x-x-109">|</span>)</td>                                                <td 
+class="align-label"><a 
+ id="x1-5004r4"></a>(4)
+                        </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">r</span></sub></td>                        <td 
+class="align-even"> = <span 
+class="cmmi-10x-x-109">NN</span>(<span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">q</span></sub><span 
+class="cmmi-10x-x-109">,I</span><sub><span 
+class="cmmi-8">d</span></sub>)</td>                                                      <td 
+class="align-label"><a 
+ id="x1-5005r5"></a>(5)
+                        </td></tr><tr><td 
+class="align-odd"><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">m</span></sub></td>                        <td 
+class="align-even"> = <span 
+class="cmsy-10x-x-109">|</span><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">q</span></sub> <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">r</span></sub><span 
+class="cmsy-10x-x-109">| </span><span 
+class="cmmi-10x-x-109">&#x003E; </span>25</td>                                                    <td 
+class="align-label"><a 
+ id="x1-5006r6"></a>(6)                        </td></tr></table>
+<!--l. 47--><p class="indent" >   Note that <span 
+class="cmmi-10x-x-109">WHT</span><sub><span 
+class="cmr-8">16</span></sub> indicates the block-based Walsh-Hadamard transform,
+quantized to 16 coefficients, and NN performs a nearest-neighbor search for
+blocks in the query image <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">q</span></sub> from the &#8221;background difference&#8221; of <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">d</span></sub>. Areas with
+a high reconstruction error are likely to be newly introduced foreground items,
+since there is less likely to be a close NN match. This reconstructed image <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">r</span></sub> is
+compared against the original query <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">q</span></sub> and thresholded by 25 to obtain a binary
+foreground mask <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">m</span></sub>.
+<!--l. 49--><p class="indent" >   The WHT is performed using a fast algorithm that computes each coefficient
+in two operations per pixel <span class="cite">[<a 
+href="#XGCK">2</a>]</span> while the NN is based off a propagation-assisted
+KD-tree <span class="cite">[<a 
+href="#XHeKdTree">5</a>]</span>. Tuples within the kd-tree are composed of the first 16 WHT
+coefficients, extracted from a 8x8 sliding-window in RGB space. Using <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">d</span></sub> for
+nearest neighbor search (as opposed to the actual background <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">b</span></sub>) enables more
+accurate reconstruction by identifying contours of areas that are likely to see
+change from frame-to-frame. False positives are minimized this way; see Section
+<a 
+href="#x1-60001.5">1.5<!--tex4ht:ref: cd:comp --></a>.
+<!--l. 51--><p class="indent" >   While the kd-tree of the background is built using a sliding window WHT,
+search tuples are extracted from the query image with the block-based (eg,
+non-overlapping) WHT. Building the kd-tree out of a sliding window is an easy
+way to increase the search space at a minimal processing cost by building more
+&#8221;templates&#8221; for a given area, making the match resilient to jitter and
+translational object motion. The same does not hold true for the query image,
+however; Table <a 
+href="#x1-60011">1<!--tex4ht:ref: cd:tab:algos --></a>, exhibits variations on this basic idea, and explains why the
+approach chosen here is optimal.
+                                                                     
+
+                                                                     
+<!--l. 53--><p class="noindent" >
+   <h4 class="subsectionHead"><span class="titlemark">1.5   </span> <a 
+ id="x1-60001.5"></a>Comparison</h4>
+<!--l. 55--><p class="noindent" >Tests were run on the dataset from <a 
+href="http://changedetection.net/" >ChangeDetection.net</a> <span class="cite">[<a 
+href="#XChangeDetectionDotNet">4</a>]</span>, which incorporates
+image sequences for several categories, including: a baseline set of videos, and
+those with various characteristics: dynamic background (swaying foliage,
+shimmering water), camera jitter, intermittent object motion, thermal imagery,
+and shadows. Additional, the videos themselves have capture artifacts resulting
+from compression, sudden color shifts from white balance, etc. Altogether the
+dataset attempts to be representative of real-world scenarios without biasing
+algorithms too strongly. Altogether, the dataset has about 90,000 frames with
+manually annotated ground truth for each one. Results were computed
+using utilities provided on the ChangeDetection.net site, and compared
+against publicly available statistics for other algorithms, also from the
+site.
+<!--l. 57--><p class="indent" >   Two modes of tuple selection were tested, with permutations of two image
+modes, for a total of four modes. For the bkg image mode, the actual image is
+used &#8211; first the NN search is done with the average image <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">b</span></sub>, while results
+depend on how well the query image <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">q</span></sub> = <span 
+class="cmmi-10x-x-109">WHT</span><sub><span 
+class="cmr-8">16</span></sub>(<span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">i</span></sub>) is reconstructed. For the
+diff image mode, <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">q</span></sub> = <span 
+class="cmmi-10x-x-109">WHT</span><sub><span 
+class="cmr-8">16</span></sub>(<span 
+class="cmsy-10x-x-109">|</span><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">i</span></sub> <span 
+class="cmsy-10x-x-109">&minus; </span><span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">b</span></sub><span 
+class="cmsy-10x-x-109">|</span>) while the NN uses <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">d</span></sub>, which is the
+default algorithm described in Section <a 
+href="#x1-50001.4">1.4<!--tex4ht:ref: cd:algo --></a>. In the block mode, <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">q</span></sub> is broken up
+into non-overlapping query tuples for NN search (the default algorithm), while
+in dense mode, query tuples are composed from a sliding window over
+<span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">q</span></sub>.
+   <div class="table">
+                                                                     
+
+                                                                     
+<!--l. 60--><p class="indent" >   <a 
+ id="x1-60011"></a><hr class="float"><div class="float" 
+>
+                                                                     
+
+                                                                     
+<div class="tabular"> <table id="TBL-1" class="tabular" 
+cellspacing="0" cellpadding="0" rules="groups" 
+><colgroup id="TBL-1-1g"><col 
+id="TBL-1-1"></colgroup><colgroup id="TBL-1-2g"><col 
+id="TBL-1-2"></colgroup><colgroup id="TBL-1-3g"><col 
+id="TBL-1-3"></colgroup><colgroup id="TBL-1-4g"><col 
+id="TBL-1-4"></colgroup><colgroup id="TBL-1-5g"><col 
+id="TBL-1-5"></colgroup><colgroup id="TBL-1-6g"><col 
+id="TBL-1-6"></colgroup><colgroup id="TBL-1-7g"><col 
+id="TBL-1-7"></colgroup><colgroup id="TBL-1-8g"><col 
+id="TBL-1-8"></colgroup><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-1-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-1"  
+class="td11">Algorithm</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-2"  
+class="td11">Recall</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-3"  
+class="td11">Specificity</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-4"  
+class="td11">FPR  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-5"  
+class="td11">FNR  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-6"  
+class="td11">PWC   </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-7"  
+class="td11">Precision</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-1-8"  
+class="td11">FMeasure</td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-2-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-1"  
+class="td11">block-bkg  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-2"  
+class="td11">0.3179</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-3"  
+class="td11">0.9353     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-4"  
+class="td11">0.0647</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-5"  
+class="td11">0.0300</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-6"  
+class="td11">8.9900 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-7"  
+class="td11">0.2162    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-2-8"  
+class="td11">0.2124     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-3-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-1"  
+class="td11">dense-bkg </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-2"  
+class="td11">0.7416</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-3"  
+class="td11">0.8563     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-4"  
+class="td11">0.1437</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-5"  
+class="td11">0.0122</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-6"  
+class="td11">14.7091</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-7"  
+class="td11">0.2166    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-3-8"  
+class="td11">0.3055     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-4-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-1"  
+class="td11">block-diff  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-2"  
+class="td11">0.6168</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-3"  
+class="td11">0.9711     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-4"  
+class="td11">0.0289</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-5"  
+class="td11">0.0174</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-6"  
+class="td11">4.2247 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-7"  
+class="td11">0.6026    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-4-8"  
+class="td11">0.5728     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-5-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-1"  
+class="td11">dense-diff  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-2"  
+class="td11">0.6394</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-3"  
+class="td11">0.9573     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-4"  
+class="td11">0.0427</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-5"  
+class="td11">0.0161</td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-6"  
+class="td11">5.4406 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-7"  
+class="td11">0.5062    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-1-5-8"  
+class="td11">0.5122     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-1-6-"><td  style="white-space:nowrap; text-align:left;" id="TBL-1-6-1"  
+class="td11">         </td></tr></table></div>
+<br /> <div class="caption" 
+><span class="id">Table&#x00A0;1: </span><span  
+class="content">Average result for various nearest-neighbor modes across all categories
+of the ChangeDetection.net dataset. <span 
+class="cmmi-10x-x-109">block </span>or <span 
+class="cmmi-10x-x-109">dense </span>indicates whether the query
+image was broken up into non-overlapping blocks for NN search, or conducted
+using a sliding window. <span 
+class="cmmi-10x-x-109">bkg </span>indicates whether the background model used for NN
+search was the background itself (bkg, <span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">b</span></sub>) or the background difference (diff,
+<span 
+class="cmmi-10x-x-109">I</span><sub><span 
+class="cmmi-8">d</span></sub>).
+     <ul class="itemize1">
+     <li class="itemize">Recall= <img 
+src="cd0x.png" alt="---TP---
+(TP +FN)"  class="frac" align="middle">
+     </li>
+     <li class="itemize">Specificity= <img 
+src="cd1x.png" alt="   TN
+(TN+F-P)"  class="frac" align="middle">
+     </li>
+     <li class="itemize">FPR (False Positive Rate) = <img 
+src="cd2x.png" alt="  FP
+(F-P+TN-)"  class="frac" align="middle">
+     </li>
+     <li class="itemize">FNR (False Negative Rate) = <img 
+src="cd3x.png" alt="  FN
+(TP-+FN-)"  class="frac" align="middle">
+     </li>
+     <li class="itemize">PWC (Percentage of Wrong Classifications) = <img 
+src="cd4x.png" alt="   100&lowast;(FN+F P)
+(TP-+FN+F-P+T-N)"  class="frac" align="middle">
+     </li>
+     <li class="itemize">Precision= <img 
+src="cd5x.png" alt="   TP
+(TP+F-P)"  class="frac" align="middle">
+     </li>
+     <li class="itemize">F-Measure= 2 <span 
+class="cmsy-10x-x-109">&lowast;</span><img 
+src="cd6x.png" alt="recall&lowast;precision
+(recall+precision)-"  class="frac" align="middle"></li></ul>
+</span></div><!--tex4ht:label?: x1-60011 -->
+                                                                     
+
+                                                                     
+   </div><hr class="endfloat" />
+   </div>
+<!--l. 83--><p class="indent" >   Block+diff has the best results. Due to the nature of the nearest-neighbor
+reconstruction, each reconstructed tuple is likely to have a non-zero error
+compared to the original. Dense tuples compound this error, degrading the
+overall results. When using the difference image, there is less relevant detail
+which could cause erroneous reconstructions. Figure <a 
+href="#x1-60071">1<!--tex4ht:ref: cd:fig:masks --></a> illustrates these
+shortcomings. Hence, the combination of block+diff works best for this
+algorithm, in 5 out of 7 metrics. The FNR and recall are the exceptions &#8211; since
+block+diff is a mechanism to reduce sensitivity of the algorithm, it tends to
+under-label more pixels than the other modes. However, this is compensated by
+greatly increased precision &#8211; the FMeasure suggests this is a sensible tradeoff.
+Figure <a 
+href="#x1-60071">1<!--tex4ht:ref: cd:fig:masks --></a> illustrates the foreground/background masks that are generated using
+each mode.
+<!--l. 85--><p class="indent" >   <hr class="figure"><div class="figure" 
+>
+                                                                     
+
+                                                                     
+<a 
+ id="x1-60071"></a>
+                                                                     
+
+                                                                     
+<!--l. 87--><p class="noindent" ><!--l. 89--><p class="noindent" ><img 
+src="images/in001912.jpg" alt="PIC"  
+width="180.0pt" height="135.00266pt" > <a 
+ id="x1-6002r1"></a>
+<span 
+class="cmr-10">Original Image</span>
+
+<!--l. 94--><p class="noindent" ><img 
+src="images/dense-bkg-mask.png" alt="PIC"  
+width="180.0pt" height="135.00266pt" > <a 
+ id="x1-6003r2"></a>
+<span 
+class="cmr-10">dense-bkg</span>
+
+<!--l. 99--><p class="noindent" ><img 
+src="images/dense-diff-mask.png" alt="PIC"  
+width="180.0pt" height="135.00266pt" > <a 
+ id="x1-6004r3"></a>
+<span 
+class="cmr-10">dense-diff</span>
+
+<!--l. 104--><p class="noindent" ><img 
+src="images/block-bkg-mask.png" alt="PIC"  
+width="180.0pt" height="135.00266pt" > <a 
+ id="x1-6005r4"></a>
+<span 
+class="cmr-10">block-bkg</span>
+
+<!--l. 109--><p class="noindent" ><img 
+src="images/block-diff-mask.png" alt="PIC"  
+width="180.0pt" height="135.00266pt" > <a 
+ id="x1-6006r5"></a>
+<span 
+class="cmr-10">block-diff</span>
+<br /> <div class="caption" 
+><span class="id">Figure&#x00A0;1: </span><span  
+class="content">Masks for various modes, a dynamic background sequence. Black
+indicates a pixel labelled as background, white foreground.</span></div><!--tex4ht:label?: x1-60071 -->
+                                                                     
+
+                                                                     
+<!--l. 114--><p class="indent" >   </div><hr class="endfigure">
+<!--l. 116--><p class="indent" >   Shown in Table <a 
+href="#x1-60082">2<!--tex4ht:ref: cd:algocomp --></a> are tests incorporating pixel-based methods,
+neighborhood-based methods, and &#8221;traditional&#8221; methods, taken from the 2012
+workshop on change detection <span class="cite">[<a 
+href="#XChangeDetectionDotNet">4</a>]</span>. PBAS <span class="cite">[<a 
+href="#XHoffmannPBAS">7</a>]</span>, ViBE <span class="cite">[<a 
+href="#XVDVibe">15</a>]</span> and PSP <span class="cite">[<a 
+href="#XSchickSuperpixels">13</a>]</span> are the
+three top-performing algorithms. PSP (Probabilistic SuperPixels) <span class="cite">[<a 
+href="#XSchickSuperpixels">13</a>]</span> and
+Rectgauss <span class="cite">[<a 
+href="#XRectgaussTex">12</a>]</span> (block-based GMM) are neighborhood-based. PBAS and ViBE <span class="cite">[<a 
+href="#XBarnichVibe">1</a>]</span>
+are fundamentally pixel-based (with randomized diffusion/propagation steps.)
+Historical or &#8221;traditional&#8221; algorithms are also included for reference. Two are
+based on simple pixel-wise distance from a fixed background model, using the
+Euclidean and Mahalanobis metrics as described in <span class="cite">[<a 
+href="#XBenezethBkgSub">3</a>]</span>. The other two are
+statistical approaches, based off a Bayesian background model <span class="cite">[<a 
+href="#XPorikliBMM">11</a>]</span> and the
+canonical paper on Gaussian mixture models for background subtraction
+<span class="cite">[<a 
+href="#XSGGMM">14</a>]</span>.
+   <div class="table">
+                                                                     
+
+                                                                     
+<!--l. 119--><p class="indent" >   <a 
+ id="x1-60082"></a><hr class="float"><div class="float" 
+>
+                                                                     
+
+                                                                     
+<div class="tabular"> <table id="TBL-2" class="tabular" 
+cellspacing="0" cellpadding="0" rules="groups" 
+><colgroup id="TBL-2-1g"><col 
+id="TBL-2-1"></colgroup><colgroup id="TBL-2-2g"><col 
+id="TBL-2-2"></colgroup><colgroup id="TBL-2-3g"><col 
+id="TBL-2-3"></colgroup><colgroup id="TBL-2-4g"><col 
+id="TBL-2-4"></colgroup><colgroup id="TBL-2-5g"><col 
+id="TBL-2-5"></colgroup><colgroup id="TBL-2-6g"><col 
+id="TBL-2-6"></colgroup><colgroup id="TBL-2-7g"><col 
+id="TBL-2-7"></colgroup><colgroup id="TBL-2-8g"><col 
+id="TBL-2-8"></colgroup><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-1-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-1-1"  
+class="td11">Algorithm      </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-1-2"  
+class="td11">Recall</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-1-3"  
+class="td11">Specificity</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-1-4"  
+class="td11">FPR  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-1-5"  
+class="td11">FNR  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-1-6"  
+class="td11">PWC </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-1-7"  
+class="td11">Precision</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-1-8"  
+class="td11">FMeasure</td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-2-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-2-1"  
+class="td11">Ours              </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-2-2"  
+class="td11">0.6168</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-2-3"  
+class="td11">0.9711     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-2-4"  
+class="td11">0.0289</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-2-5"  
+class="td11">0.0175</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-2-6"  
+class="td11">4.2247</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-2-7"  
+class="td11">0.6026    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-2-8"  
+class="td11">0.5728     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-3-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-3-1"  
+class="td11">PBAS <span class="cite">[<a 
+href="#XHoffmannPBAS">7</a>]</span>         </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-3-2"  
+class="td11">0.7840</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-3-3"  
+class="td11">0.9898     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-3-4"  
+class="td11">0.0102</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-3-5"  
+class="td11">0.2160</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-3-6"  
+class="td11">1.7693</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-3-7"  
+class="td11">0.8160    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-3-8"  
+class="td11">0.7532     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-4-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-4-1"  
+class="td11">ViBE <span class="cite">[<a 
+href="#XVDVibe">15</a>]</span>        </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-4-2"  
+class="td11">0.6907</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-4-3"  
+class="td11">0.9928     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-4-4"  
+class="td11">0.0072</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-4-5"  
+class="td11">0.3093</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-4-6"  
+class="td11">2.1824</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-4-7"  
+class="td11">0.8318    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-4-8"  
+class="td11">0.7224     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-5-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-5-1"  
+class="td11">PSP <span class="cite">[<a 
+href="#XSchickSuperpixels">13</a>]</span>         </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-5-2"  
+class="td11">0.8037</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-5-3"  
+class="td11">0.9830     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-5-4"  
+class="td11">0.0170</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-5-5"  
+class="td11">0.1963</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-5-6"  
+class="td11">2.3937</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-5-7"  
+class="td11">0.7512    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-5-8"  
+class="td11">0.7372     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-6-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-6-1"  
+class="td11">Rectgauss <span class="cite">[<a 
+href="#XRectgaussTex">12</a>]</span>  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-6-2"  
+class="td11">0.5156</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-6-3"  
+class="td11">0.9862     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-6-4"  
+class="td11">0.0138</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-6-5"  
+class="td11">0.4844</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-6-6"  
+class="td11">3.6842</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-6-7"  
+class="td11">0.7190    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-6-8"  
+class="td11">0.5221     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-7-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-7-1"  
+class="td11">GMM <span class="cite">[<a 
+href="#XSGGMM">14</a>]</span>       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-7-2"  
+class="td11">0.7108</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-7-3"  
+class="td11">0.9860     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-7-4"  
+class="td11">0.0140</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-7-5"  
+class="td11">0.2892</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-7-6"  
+class="td11">3.1037</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-7-7"  
+class="td11">0.7012    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-7-8"  
+class="td11">0.6624     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-8-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-8-1"  
+class="td11">Bayesian <span class="cite">[<a 
+href="#XPorikliBMM">11</a>]</span>    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-8-2"  
+class="td11">0.6018</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-8-3"  
+class="td11">0.9826     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-8-4"  
+class="td11">0.0174</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-8-5"  
+class="td11">0.3982</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-8-6"  
+class="td11">3.3879</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-8-7"  
+class="td11">0.7435    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-8-8"  
+class="td11">0.6272     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-9-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-9-1"  
+class="td11">Mahalanobis <span class="cite">[<a 
+href="#XBenezethBkgSub">3</a>]</span></td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-9-2"  
+class="td11">0.7607</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-9-3"  
+class="td11">0.9599     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-9-4"  
+class="td11">0.0401</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-9-5"  
+class="td11">0.2393</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-9-6"  
+class="td11">4.6631</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-9-7"  
+class="td11">0.6040    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-9-8"  
+class="td11">0.6259     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-10-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-10-1"  
+class="td11">Euclidean <span class="cite">[<a 
+href="#XBenezethBkgSub">3</a>]</span>    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-10-2"  
+class="td11">0.7048</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-10-3"  
+class="td11">0.9692     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-10-4"  
+class="td11">0.0308</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-10-5"  
+class="td11">0.2952</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-10-6"  
+class="td11">4.3465</td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-10-7"  
+class="td11">0.6223    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-2-10-8"  
+class="td11">0.6111     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-2-11-"><td  style="white-space:nowrap; text-align:left;" id="TBL-2-11-1"  
+class="td11">             </td></tr></table></div>
+<br /> <div class="caption" 
+><span class="id">Table&#x00A0;2: </span><span  
+class="content">Algorithm comparision, average score across all categories of the
+ChangeDetection.net dataset.</span></div><!--tex4ht:label?: x1-60082 -->
+                                                                     
+
+                                                                     
+   </div><hr class="endfloat" />
+   </div>
+<!--l. 136--><p class="indent" >   The results show our method near the bottom of the pack across all metrics.
+Interestingly, Rectgauss, the method most similar to ours, also struggles to be
+competitive, indicating that block-based neighborhood operations might not be
+ideal for this application. This is perhaps due to capturing excessive context,
+paired with an inflexible background model. There is little reason to
+choose this algorithm (in its present state); most of these algorithms
+deliver better results while also being more performant &#8211; for example,
+ViBE is simple enough to be embedded onto point-and-shoot cameras
+<span class="cite">[<a 
+href="#XBarnichVibe">1</a>]</span>.
+   <div class="table">
+                                                                     
+
+                                                                     
+<!--l. 139--><p class="indent" >   <a 
+ id="x1-60093"></a><hr class="float"><div class="float" 
+>
+                                                                     
+
+                                                                     
+<div class="tabular"> <table id="TBL-3" class="tabular" 
+cellspacing="0" cellpadding="0" rules="groups" 
+><colgroup id="TBL-3-1g"><col 
+id="TBL-3-1"></colgroup><colgroup id="TBL-3-2g"><col 
+id="TBL-3-2"></colgroup><colgroup id="TBL-3-3g"><col 
+id="TBL-3-3"></colgroup><colgroup id="TBL-3-4g"><col 
+id="TBL-3-4"></colgroup><colgroup id="TBL-3-5g"><col 
+id="TBL-3-5"></colgroup><colgroup id="TBL-3-6g"><col 
+id="TBL-3-6"></colgroup><colgroup id="TBL-3-7g"><col 
+id="TBL-3-7"></colgroup><colgroup id="TBL-3-8g"><col 
+id="TBL-3-8"></colgroup><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-3-1-"><td  style="white-space:nowrap; text-align:left;" id="TBL-3-1-1"  
+class="td11">Category</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-1-2"  
+class="td11">Recall</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-1-3"  
+class="td11">Specificity</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-1-4"  
+class="td11">FPR  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-1-5"  
+class="td11">FNR  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-1-6"  
+class="td11">PWC   </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-1-7"  
+class="td11">Precision</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-1-8"  
+class="td11">FMeasure</td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-3-2-"><td  style="white-space:nowrap; text-align:left;" id="TBL-3-2-1"  
+class="td11">Baseline  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-2-2"  
+class="td11">0.7359</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-2-3"  
+class="td11">0.9969     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-2-4"  
+class="td11">0.0031</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-2-5"  
+class="td11">0.0104</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-2-6"  
+class="td11">1.2750 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-2-7"  
+class="td11">0.9146    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-2-8"  
+class="td11">0.8019     </td></tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-3-3-"><td  style="white-space:nowrap; text-align:left;" id="TBL-3-3-1"  
+class="td11">CJ </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-3-2"  
+class="td11">0.4491</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-3-3"  
+class="td11">0.9725 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-3-4"  
+class="td11">0.0275</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-3-5"  
+class="td11">0.0237</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-3-6"  
+class="td11">4.9068 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-3-7"  
+class="td11">0.4833 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-3-8"  
+class="td11">0.4488</td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-3-4-"><td  style="white-space:nowrap; text-align:left;" id="TBL-3-4-1"  
+class="td11">DB         </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-4-2"  
+class="td11">0.5760</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-4-3"  
+class="td11">0.9876     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-4-4"  
+class="td11">0.0124</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-4-5"  
+class="td11">0.0040</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-4-6"  
+class="td11">1.6159 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-4-7"  
+class="td11">0.4241    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-4-8"  
+class="td11">0.4616     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-3-5-"><td  style="white-space:nowrap; text-align:left;" id="TBL-3-5-1"  
+class="td11">IOM       </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-5-2"  
+class="td11">0.6014</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-5-3"  
+class="td11">0.9030     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-5-4"  
+class="td11">0.0970</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-5-5"  
+class="td11">0.0369</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-5-6"  
+class="td11">11.6014</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-5-7"  
+class="td11">0.4635    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-5-8"  
+class="td11">0.4606     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-3-6-"><td  style="white-space:nowrap; text-align:left;" id="TBL-3-6-1"  
+class="td11">Shadow   </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-6-2"  
+class="td11">0.6572</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-6-3"  
+class="td11">0.9805     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-6-4"  
+class="td11">0.0195</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-6-5"  
+class="td11">0.0171</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-6-6"  
+class="td11">3.4941 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-6-7"  
+class="td11">0.6164    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-6-8"  
+class="td11">0.5936     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-3-7-"><td  style="white-space:nowrap; text-align:left;" id="TBL-3-7-1"  
+class="td11">Thermal  </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-7-2"  
+class="td11">0.6810</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-7-3"  
+class="td11">0.9861     </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-7-4"  
+class="td11">0.0139</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-7-5"  
+class="td11">0.0126</td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-7-6"  
+class="td11">2.4551 </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-7-7"  
+class="td11">0.7135    </td><td  style="white-space:nowrap; text-align:left;" id="TBL-3-7-8"  
+class="td11">0.6701     </td>
+</tr><tr 
+class="hline"><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td><td><hr></td></tr><tr  
+ style="vertical-align:baseline;" id="TBL-3-8-"><td  style="white-space:nowrap; text-align:left;" id="TBL-3-8-1"  
+class="td11">        </td></tr></table></div>
+<br /> <div class="caption" 
+><span class="id">Table&#x00A0;3: </span><span  
+class="content">Results for different categories. CJ=Camera Jitter, DB=Dynamic
+Background,  IOM=Intermittent  Object  Motion,  using  the  algorithm
+described in section <a 
+href="#x1-50001.4">1.4<!--tex4ht:ref: cd:algo --></a>.</span></div><!--tex4ht:label?: x1-60093 -->
+                                                                     
+
+                                                                     
+   </div><hr class="endfloat" />
+   </div>
+<!--l. 153--><p class="indent" >   In Table <a 
+href="#x1-60093">3<!--tex4ht:ref: cd:cmp:cat --></a>, results are shown for all categories in the ChangeDetection.net
+dataset. Unsurprisingly, the baseline sequences exhibit the best results. Note that
+the dynamic background has a comparatively low value for PWC; looking at with
+low precision/recall values, it may be that the segmentation threshold is
+set too low for this particular category. However, poor results in other
+categories advise against lowering the threshold for the general case. This
+algorithm, as-is, is simply not competitive, especially when compared to better
+methods.
+   <h4 class="subsectionHead"><span class="titlemark">1.6   </span> <a 
+ id="x1-70001.6"></a>Future Work</h4>
+<!--l. 157--><p class="noindent" >There are a few ways to improve this work. Incorporate more ideas from leading
+algorithms, especially to create a more robust background model rather than
+the average image. Currently the background is fixed after the training
+step; this could be recreated every so often to accommodate gradual
+changes, or adapted iteratively. For nearest-neighbor features, one could
+incorporate transforms other than the WHT, such as the DCT or PCA
+<span class="cite">[<a 
+href="#XMargolinDistinctness">9</a>]</span>.
+<!--l. 159--><p class="indent" >   Entirely different types of feature tuples could be investigated; histograms
+have been used with success <span class="cite">[<a 
+href="#XRectgaussTex">12</a>,&#x00A0;<a 
+href="#XHeikkilaBackgroundModelling">6</a>]</span>, or perhaps even SIFT-like features. However,
+the kd-tree implementation would not likely be of much use in these
+scenarios.
+<!--l. 1--><p class="noindent" >
+   <h3 class="likesectionHead"><a 
+ id="x1-80001.6"></a>References</h3>
+<!--l. 1--><p class="noindent" >
+    <div class="thebibliography">
+    <p class="bibitem" ><span class="biblabel">
+  [1]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XBarnichVibe"></a>Olivier Barnich and Marc Van&#x00A0;Droogenbroeck.  Vibe: A universal
+    background  subtraction  algorithm  for  video  sequences.      <span 
+class="cmti-10x-x-109">Image</span>
+    <span 
+class="cmti-10x-x-109">Processing, IEEE Transactions on</span>, 20(6):1709&#8211;1724, June.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+  [2]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XGCK"></a>Gil Ben-Artzi, Hagit Hel-Or, and Yacov Hel-Or. The gray-code filter
+    kernels. <span 
+class="cmti-10x-x-109">Pattern Analysis and Machine Intelligence, IEEE Transactions</span>
+    <span 
+class="cmti-10x-x-109">on</span>, 29(3):382&#8211;393, March.
+    </p>
+                                                                     
+
+                                                                     
+    <p class="bibitem" ><span class="biblabel">
+  [3]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XBenezethBkgSub"></a>Yannick        Benezeth,        Pierre-Marc        Jodoin,        Bruno
+    Emile, Christophe Rosenberger, and Hlne Laurent. Comparative study
+    of background subtraction algorithms.  <span 
+class="cmti-10x-x-109">Journal of Electronic Imaging</span>,
+    19(3):033003&#8211;033003&#8211;12, 2010.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+  [4]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XChangeDetectionDotNet"></a>Nil  Goyette,  Pierre-Marc  Jodoin,  Faith  Porikli,  Janusz  Konrad,
+    and Prakash Ishwar.   Changedetection.net: A new change detection
+    benchmark  dataset.   In  <span 
+class="cmti-10x-x-109">Computer  Vision  and  Pattern  Recognition</span>
+    <span 
+class="cmti-10x-x-109">Workshops (CVPRW), 2012 IEEE Computer Society Conference on</span>,
+    pages 1&#8211;8, June.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+  [5]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XHeKdTree"></a>Kaiming He and Jian Sun.  Computing nearest-neighbor fields via
+    propagation-assisted kd-trees. In <span 
+class="cmti-10x-x-109">CVPR</span>, pages 111&#8211;118. IEEE, 2012.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+  [6]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XHeikkilaBackgroundModelling"></a>M.&#x00A0;Heikkila   and   M.&#x00A0;Pietikainen.      A   texture-based   method
+    for   modeling   the   background   and   detecting   moving   objects.
+    <span 
+class="cmti-10x-x-109">Pattern  Analysis  and  Machine  Intelligence,  IEEE  Transactions  on</span>,
+    28(4):657&#8211;662, 2006.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+  [7]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XHoffmannPBAS"></a>Martin  Hofmann,  Philipp  Tiefenbacher,  and  Gerhard  Rigoll.
+    Background  segmentation  with  feedback:  The  pixel-based  adaptive
+    segmenter.  In <span 
+class="cmti-10x-x-109">Computer Vision and Pattern Recognition Workshops</span>
+    <span 
+class="cmti-10x-x-109">(CVPRW), 2012 IEEE Computer Society Conference on</span>, pages 38&#8211;43,
+    June.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+  [8]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XLuRandomPatches"></a>Le&#x00A0;Lu and Gregory&#x00A0;D. Hager.   Dynamic foreground/background
+    extraction from images and videos using random patches. In <span 
+class="cmti-10x-x-109">NIPS&#8217;06</span>,
+    pages 929&#8211;936, 2006.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+  [9]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XMargolinDistinctness"></a>Ran Margolin, Ayellet Tal, and Lihi Zelnik-Manor. What makes a
+    patch distinct? <span 
+class="cmti-10x-x-109">Computer Vision and Pattern Recognition, 2013. CVPR</span>
+    <span 
+class="cmti-10x-x-109">2013. IEEE Conference on</span>, page To Appear, Jun 2013.
+                                                                     
+
+                                                                     
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+ [10]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XMosheSpatiotemporalGCK"></a>Y.&#x00A0;Moshe, H.&#x00A0;Hel-Or, and Y.&#x00A0;Hel-Or. Foreground detection using
+    spatiotemporal projection kernels.  In <span 
+class="cmti-10x-x-109">Computer Vision and Pattern</span>
+    <span 
+class="cmti-10x-x-109">Recognition  (CVPR),  2012  IEEE  Conference  on</span>,  pages  3210&#8211;3217,
+    2012.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+ [11]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XPorikliBMM"></a>Fatih Porikli and Oncel Tuzel.  Bayesian background modeling for
+    foreground detection.  In <span 
+class="cmti-10x-x-109">Proceedings of the third ACM international</span>
+    <span 
+class="cmti-10x-x-109">workshop on Video surveillance &amp; sensor networks</span>, VSSN &#8217;05, pages
+    55&#8211;58, New York, NY, USA, 2005. ACM.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+ [12]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XRectgaussTex"></a>Dora Rahi, Pier-Luc St-Onge, and Guillaume-Alexandre Bilodeau.
+    Rectgauss-tex: Block-based background subtraction. Technical Report
+    EPM-RT-2012-03, Ecole Polytechnique de Montreal, Mar 2012.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+ [13]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XSchickSuperpixels"></a>A.&#x00A0;Schick, M.&#x00A0;Bauml, and R.&#x00A0;Stiefelhagen.  Improving foreground
+    segmentations with probabilistic superpixel markov random fields.  In
+    <span 
+class="cmti-10x-x-109">Computer Vision and Pattern Recognition Workshops (CVPRW), 2012</span>
+    <span 
+class="cmti-10x-x-109">IEEE Computer Society Conference on</span>, pages 27&#8211;31, 2012.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+ [14]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XSGGMM"></a>Chris Stauffer and W.&#x00A0;E&#x00A0;L Grimson. Adaptive background mixture
+    models  for  real-time  tracking.    In  <span 
+class="cmti-10x-x-109">Computer  Vision  and  Pattern</span>
+    <span 
+class="cmti-10x-x-109">Recognition, 1999. IEEE Computer Society Conference on.</span>, volume&#x00A0;2,
+    pages &#8211;252 Vol. 2, 1999.
+    </p>
+    <p class="bibitem" ><span class="biblabel">
+ [15]<span class="bibsp">&#x00A0;&#x00A0;&#x00A0;</span></span><a 
+ id="XVDVibe"></a>M.&#x00A0;Van Droogenbroeck and O.&#x00A0;Paquot.  Background subtraction:
+    Experiments  and  improvements  for  ViBe.     In  <span 
+class="cmti-10x-x-109">Change  Detection</span>
+    <span 
+class="cmti-10x-x-109">Workshop (CDW)</span>, Providence, Rhode Island, June 2012.
+</p>
+    </div>
+    
+</body></html> 
+
+                                                                     
+
+
